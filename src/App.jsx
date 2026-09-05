@@ -486,6 +486,19 @@ export default function App() {
           setTimeout(() => setSyncToast(null), 7000);
         })
         .catch((err) => {
+          if (err.code === 'TOKEN_EXPIRED' || err.message?.includes('invalid authentication credentials') || err.message?.includes('401')) {
+            clearGoogleSession();
+            setGoogleSession(null);
+            setIsGoogleAuthOpen(true);
+            setSyncToast({
+              type: 'warning',
+              title: 'Sesi Google Kedaluwarsa',
+              message: 'Token login Google Anda telah kedaluwarsa. Silakan login ulang via popup yang terbuka.'
+            });
+            setTimeout(() => setSyncToast(null), 8000);
+            return;
+          }
+
           let errorMsg = err.message || 'Gagal mengirim data ke Google Sheets API.';
           if (errorMsg.toLowerCase().includes('not supported') || errorMsg.includes('FAILED_PRECONDITION')) {
             errorMsg = 'File di Google Drive masih berformat Excel (.XLSX). Silakan buka file tersebut di browser lalu klik menu Berkas/File > "Simpan sebagai Google Spreadsheet".';

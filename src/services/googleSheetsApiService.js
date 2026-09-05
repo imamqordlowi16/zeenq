@@ -105,6 +105,13 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
     const errData = await response.json().catch(() => ({}));
     const errMsg = errData.error?.message || `HTTP ${response.status}: Gagal menambahkan bulan ke Google Sheet.`;
 
+    // Otomatis tangani jika sesi login / token kedaluwarsa (401)
+    if (response.status === 401 || errMsg.toLowerCase().includes('invalid authentication credentials')) {
+      const expiredErr = new Error('Sesi login Google Anda telah kedaluwarsa. Silakan hubungkan ulang akun Google Anda.');
+      expiredErr.code = 'TOKEN_EXPIRED';
+      throw expiredErr;
+    }
+
     // Otomatis tangani jika dokumen adalah file Microsoft Excel (.xlsx / Office file)
     if (errMsg.toLowerCase().includes('office file') || errMsg.toLowerCase().includes('not supported for this document')) {
       console.log('[ZeenQ Auto-Recovery] Mendeteksi file Excel Office. Mencoba konversi otomatis ke Google Spreadsheet...');
