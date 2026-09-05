@@ -10,13 +10,16 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-const STANDARD_MONTHS = [
+const SEMESTER_2_MONTHS = [
   { name: 'JANUARI', defaultDays: 31 },
   { name: 'FEBRUARI', defaultDays: 28 },
   { name: 'MARET', defaultDays: 31 },
   { name: 'APRIL', defaultDays: 30 },
   { name: 'MEI', defaultDays: 31 },
-  { name: 'JUNI', defaultDays: 30 },
+  { name: 'JUNI', defaultDays: 30 }
+];
+
+const SEMESTER_1_MONTHS = [
   { name: 'JULI', defaultDays: 31 },
   { name: 'AGUSTUS', defaultDays: 31 },
   { name: 'SEPTEMBER', defaultDays: 30 },
@@ -30,24 +33,47 @@ export default function AddMonthModal({
   onClose,
   existingMonths = [],
   studentCount = 0,
+  sheetTitle = '',
   onAddMonth
 }) {
   const currentYear = new Date().getFullYear();
   const existingNames = existingMonths.map((m) => m.name.toUpperCase());
 
+  const isSemester2Explicit =
+    sheetTitle.toUpperCase().includes('SEMESTER 2') ||
+    sheetTitle.toUpperCase().includes('SEMESTER II') ||
+    sheetTitle.toUpperCase().includes('SMT 2') ||
+    sheetTitle.toUpperCase().includes('SMT II') ||
+    sheetTitle.toUpperCase().includes('GENAP') ||
+    existingNames.some((n) => ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'].includes(n));
+
+  const isSemester1 = !isSemester2Explicit && (
+    sheetTitle.toUpperCase().includes('SEMESTER 1') ||
+    sheetTitle.toUpperCase().includes('SMT 1') ||
+    sheetTitle.toUpperCase().includes('GANJIL')
+  );
+
+  const standardMonthsList = isSemester1
+    ? [...SEMESTER_1_MONTHS, ...SEMESTER_2_MONTHS]
+    : [...SEMESTER_2_MONTHS, ...SEMESTER_1_MONTHS];
+
   const [mode, setMode] = useState('standard'); // 'standard' or 'custom'
-  const [selectedMonthName, setSelectedMonthName] = useState('OKTOBER');
+  const [selectedMonthName, setSelectedMonthName] = useState(isSemester1 ? 'JULI' : 'FEBRUARI');
   const [customNameInput, setCustomNameInput] = useState('');
   const [yearInput, setYearInput] = useState(currentYear);
-  const [totalDays, setTotalDays] = useState(31);
+  const [totalDays, setTotalDays] = useState(28);
   const [initialAttendance, setInitialAttendance] = useState('empty'); // 'empty' or 'hadir'
   const [errorMsg, setErrorMsg] = useState('');
 
   // Always reset properly when modal opens
   useEffect(() => {
     if (isOpen) {
+      const primaryList = isSemester1 ? SEMESTER_1_MONTHS : SEMESTER_2_MONTHS;
       const firstAvailable =
-        STANDARD_MONTHS.find((m) => !existingNames.includes(m.name)) || STANDARD_MONTHS[0];
+        primaryList.find((m) => !existingNames.includes(m.name)) ||
+        standardMonthsList.find((m) => !existingNames.includes(m.name)) ||
+        primaryList[0];
+
       setMode('standard');
       setSelectedMonthName(firstAvailable.name);
       setTotalDays(firstAvailable.defaultDays);
@@ -56,7 +82,7 @@ export default function AddMonthModal({
       setInitialAttendance('empty');
       setErrorMsg('');
     }
-  }, [isOpen, existingMonths]);
+  }, [isOpen, existingMonths, sheetTitle]);
 
   if (!isOpen) return null;
 
@@ -233,17 +259,37 @@ export default function AddMonthModal({
           {/* Standard Months Grid */}
           {mode === 'standard' ? (
             <div style={{ marginBottom: '16px' }}>
-              <label
+              <div
                 style={{
-                  display: 'block',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  marginBottom: '8px',
-                  color: 'var(--text-primary)'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px'
                 }}
               >
-                Pilih Bulan yang Ingin Ditambahkan:
-              </label>
+                <label
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    margin: 0,
+                    color: 'var(--text-primary)'
+                  }}
+                >
+                  Pilih Bulan yang Ingin Ditambahkan:
+                </label>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    background: 'var(--primary-light)',
+                    color: 'var(--primary)',
+                    fontWeight: 700
+                  }}
+                >
+                  {isSemester1 ? 'Semester 1 (Ganjil)' : 'Semester 2 (Genap)'}
+                </span>
+              </div>
               <div
                 style={{
                   display: 'grid',
@@ -251,7 +297,7 @@ export default function AddMonthModal({
                   gap: '8px'
                 }}
               >
-                {STANDARD_MONTHS.map((m) => {
+                {standardMonthsList.map((m) => {
                   const isSelected = selectedMonthName === m.name;
                   const alreadyExists = existingNames.includes(m.name);
                   return (

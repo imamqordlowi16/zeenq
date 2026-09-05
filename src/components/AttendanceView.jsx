@@ -27,7 +27,8 @@ export default function AttendanceView({
   onOpenQuickText,
   onAddMonth,
   onDeleteMonth,
-  onExportExcel
+  onExportExcel,
+  onFixSemester2
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, ABSENT_ONLY, PERFECT_ONLY
@@ -210,6 +211,29 @@ export default function AttendanceView({
           <Plus size={14} />
           <span>Tambah Bulan</span>
         </button>
+
+        {/* Quick Fix Semester 2 Order button */}
+        {onFixSemester2 && (
+          <button
+            type="button"
+            onClick={onFixSemester2}
+            className="btn btn-sm btn-secondary"
+            style={{
+              borderRadius: '20px',
+              padding: '6px 14px',
+              borderColor: 'var(--accent-amber)',
+              color: 'var(--accent-amber)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 600
+            }}
+            title="Rapikan judul dan urutan tabel di Google Sheet agar dimulai dari Januari (Semester 2)"
+          >
+            <RotateCcw size={13} />
+            <span>Rapikan Urutan Bulan (Semester 2)</span>
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -445,6 +469,7 @@ export default function AttendanceView({
         onClose={() => setIsAddMonthOpen(false)}
         existingMonths={attendanceData.months || []}
         studentCount={currentMonth.students?.length || 0}
+        sheetTitle={attendanceData.docTitle || ''}
         onAddMonth={onAddMonth}
       />
     </div>

@@ -412,7 +412,23 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
     });
   });
 
+  // Sort months according to semester calendar order (Semester 2: Januari s/d Juni; Semester 1: Juli s/d Desember)
+  const semesterOrder = isSemester2
+    ? ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
+    : ['JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER', 'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'];
+
+  months.sort((a, b) => {
+    const idxA = semesterOrder.indexOf(a.name.toUpperCase());
+    const idxB = semesterOrder.indexOf(b.name.toUpperCase());
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return (a.monthOrder || 0) - (b.monthOrder || 0);
+  });
+
   return {
+    docTitle,
+    isSemester2,
     months,
     allStudents: Array.from(studentMap.values()),
     rawRows

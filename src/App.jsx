@@ -11,7 +11,7 @@ import QuickTextInputModal from './components/QuickTextInputModal';
 import GoogleScriptSetupModal from './components/GoogleScriptSetupModal';
 import GoogleAuthModal from './components/GoogleAuthModal';
 import { getStoredGoogleSession, clearGoogleSession } from './services/googleAuthService';
-import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues } from './services/googleSheetsApiService';
+import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues, fixSemester2Spreadsheet } from './services/googleSheetsApiService';
 import confetti from 'canvas-confetti';
 import {
   getSavedConfig,
@@ -57,7 +57,7 @@ export default function App() {
   const [mutasiData, setMutasiData] = useState(null);
 
   // UI States
-  const [selectedMonth, setSelectedMonth] = useState('juli');
+  const [selectedMonth, setSelectedMonth] = useState('januari');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFromCache, setIsFromCache] = useState(false);
@@ -316,7 +316,7 @@ export default function App() {
     if (!googleToken) return;
     if (
       !window.confirm(
-        'Hapus baris 1 s/d 40 yang rusak di Google Sheet Anda?\n\nSetelah dihapus, tabel template resmi sekolah (Januari) otomatis naik menjadi baris paling atas.'
+        'Rapikan tabel dan urutan bulan Semester 2 di Google Sheets?\n\nSistem akan membersihkan tabel percobaan lama sehingga tabel resmi Januari naik ke urutan pertama paling atas, dan urutan bulan selanjutnya (Februari, Maret, dst) akan rapi otomatis.'
       )
     ) {
       return;
@@ -325,24 +325,24 @@ export default function App() {
     setIsCleaning(true);
     setSyncToast({
       type: 'loading',
-      title: 'Membersihkan Google Sheets...',
-      message: 'Menghapus baris 1 s/d 40 yang rusak di spreadsheet Anda.'
+      title: 'Merapikan Google Sheets...',
+      message: 'Menyesuaikan urutan bulan & membersihkan tabel percobaan di spreadsheet Anda...'
     });
 
     try {
-      await deleteCorruptedUpperRows(sheetConfig.id, googleToken);
+      const res = await fixSemester2Spreadsheet(sheetConfig.id, googleToken);
       setSyncToast({
         type: 'success',
-        title: 'Berhasil Dibersihkan!',
-        message: 'Baris 1-40 berhasil dihapus. Sekarang template presensi resmi sekolah sudah rapi di paling atas.'
+        title: 'Berhasil Dirapikan!',
+        message: res.message || 'Urutan bulan berhasil dirapikan! Tabel resmi Januari sekarang berada di paling atas.'
       });
       setTimeout(() => setSyncToast(null), 7000);
-      loadSheetData(sheetConfig, true);
+      await loadSheetData(sheetConfig, true);
     } catch (err) {
       setSyncToast({
         type: 'error',
-        title: 'Gagal Membersihkan Baris',
-        message: err.message || 'Terjadi kesalahan saat menghapus baris di Google Sheets.'
+        title: 'Gagal Merapikan Baris',
+        message: err.message || 'Terjadi kesalahan saat merapikan baris di Google Sheets.'
       });
       setTimeout(() => setSyncToast(null), 8000);
     } finally {
@@ -811,6 +811,7 @@ export default function App() {
                 onOpenQuickText={() => setIsQuickTextOpen(true)}
                 onAddMonth={handleAddMonth}
                 onDeleteMonth={handleDeleteMonth}
+                onFixSemester2={handleCleanUpperRows}
               />
             )}
 

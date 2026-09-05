@@ -29,11 +29,13 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
   const cleanYear = String(year).includes('/') ? year : `${year}/${Number(year) + 1}`;
   const yearNum = parseInt(String(year).split('/')[0], 10) || 2026;
 
-  // Bangun baris data tabel bulan baru persis sesuai template resmi sekolah (Dua Tingkat Header)
+  // Bangun baris data tabel bulan baru persis sesuai template resmi sekolah
   const rows = [];
 
-  // 1. Judul Tabel Bulan (Baris pertama agar range deterministik 100%)
-  rows.push([`DAFTAR HADIR PESERTA DIDIK BULAN ${monthName.toUpperCase()} TAHUN AJARAN ${cleanYear}`]);
+  // 1. Judul Tabel Bulan (Dua Baris Terpisah Sesuai Template Asli Sekolah)
+  rows.push([`DAFTAR HADIR PESERTA DIDIK BULAN ${monthName.toUpperCase()}`]);
+  rows.push([`TAHUN AJARAN ${cleanYear}`]);
+  rows.push([]); // Baris kosong pemisah sebelum header tabel
 
   // 2. Baris Header Tingkat 1 (Top Header: No, NAMA SISWA, 1..31, JUMLAH)
   const headerTop = ['No', 'NAMA SISWA'];
@@ -79,9 +81,14 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
 
   // 6. Baris Tanda Tangan & Pengesahan
   rows.push([]);
+  const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1).toLowerCase();
+  const isSemester2Month = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'].includes(monthName.toUpperCase());
+  const yearParts = String(year).split('/');
+  const effectiveYear = isSemester2Month && yearParts.length > 1 ? parseInt(yearParts[1], 10) : yearNum;
+
   const sigRow1 = Array(37).fill('');
   sigRow1[1] = 'Mengetahui,';
-  sigRow1[28] = `Jakarta, ${monthName} ${yearNum}`;
+  sigRow1[28] = `Jakarta, ${capitalizedMonth} ${effectiveYear}`;
   rows.push(sigRow1);
 
   const sigRow2 = Array(37).fill('');
@@ -166,6 +173,7 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
       monthName,
       yearNum,
       students.length,
+      totalDays,
       accessToken
     );
   }
@@ -211,7 +219,7 @@ function getWeekendDaysInMonth(monthName, yearNum) {
  * Menerapkan format visual presisi (Borders, Warna Header Peach, Kolom Libur Pink, Merge Header Dua Tingkat, Lebar Kolom)
  * 100% persis mengikuti format tabel presensi asli di spreadsheet Anda.
  */
-async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, yearNum, studentCount, accessToken) {
+async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, yearNum, studentCount, totalDays = 31, accessToken) {
   try {
     const metaRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
       headers: { Authorization: `Bearer ${accessToken}` }
@@ -225,11 +233,13 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
     if (!match) return;
     const startRow1 = parseInt(match[2], 10); // 1-indexed
 
-    // Baris pertama yang diappend adalah baris Judul Tabel
-    const titleRow = startRow1 - 1; // 0-indexed
-    const headerTopRow = titleRow + 1;
-    const headerSubRow = titleRow + 2;
-    const firstStudentRow = titleRow + 3;
+    // Baris pertama yang diappend adalah baris Judul Tabel 1
+    const baseRow = startRow1 - 1; // 0-indexed
+    const titleRow1 = baseRow;
+    const titleRow2 = baseRow + 1;
+    const headerTopRow = baseRow + 3;
+    const headerSubRow = baseRow + 4;
+    const firstStudentRow = baseRow + 5;
     const lastStudentRow = firstStudentRow + studentCount; // exclusive
     const jumlahRow = lastStudentRow;
     const persentaseRow = jumlahRow + 1;
@@ -355,19 +365,21 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
     // 5. Background Warna Kolom Akhir Pekan (Sabtu & Minggu: Pink/Merah Muda #EA9999)
     const weekends = getWeekendDaysInMonth(monthName, yearNum);
     weekends.forEach((dayNum) => {
-      const colIdx = 1 + dayNum; // Kolom C = Day 1 (col index 2)
-      if (colIdx < 33) {
-        requests.push({
-          repeatCell: {
-            range: { sheetId, startRowIndex: headerTopRow, endRowIndex: lastStudentRow, startColumnIndex: colIdx, endColumnIndex: colIdx + 1 },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.945, green: 0.647, blue: 0.647 }
-              }
-            },
-            fields: 'userEnteredFormat.backgroundColor'
-          }
-        });
+      if (dayNum <= totalDays) {
+        const colIdx = 1 + dayNum; // Kolom C = Day 1 (col index 2)
+        if (colIdx < 33) {
+          requests.push({
+            repeatCell: {
+              range: { sheetId, startRowIndex: headerTopRow, endRowIndex: lastStudentRow, startColumnIndex: colIdx, endColumnIndex: colIdx + 1 },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.945, green: 0.647, blue: 0.647 }
+                }
+              },
+              fields: 'userEnteredFormat.backgroundColor'
+            }
+          });
+        }
       }
     });
 
@@ -406,11 +418,43 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
       }
     });
 
-    // 8. Judul Tabel: Bold, 10pt
+    // 8. Format Judul Tabel Dua Baris Terpusat Sesuai Template Asli Sekolah
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: titleRow1, endRowIndex: titleRow1 + 1, startColumnIndex: 0, endColumnIndex: 37 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
     requests.push({
       repeatCell: {
-        range: { sheetId, startRowIndex: titleRow, endRowIndex: titleRow + 1, startColumnIndex: 0, endColumnIndex: 37 },
-        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10, fontFamily: 'Arial' }, horizontalAlignment: 'LEFT', verticalAlignment: 'MIDDLE' } },
+        range: { sheetId, startRowIndex: titleRow1, endRowIndex: titleRow1 + 1, startColumnIndex: 0, endColumnIndex: 37 },
+        cell: {
+          userEnteredFormat: {
+            textFormat: { bold: true, fontSize: 11, fontFamily: 'Arial' },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE'
+          }
+        },
+        fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    });
+
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: titleRow2, endRowIndex: titleRow2 + 1, startColumnIndex: 0, endColumnIndex: 37 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: titleRow2, endRowIndex: titleRow2 + 1, startColumnIndex: 0, endColumnIndex: 37 },
+        cell: {
+          userEnteredFormat: {
+            textFormat: { bold: true, fontSize: 10, fontFamily: 'Arial' },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE'
+          }
+        },
         fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
       }
     });
@@ -578,3 +622,126 @@ export async function updateAttendanceMarkToGoogleSheet(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Memperbaiki judul bulan dan urutan tabel di Google Sheet agar sesuai Semester 2 (Januari s/d Juni)
+ * 1. Jika terdapat tabel uji coba 'BULAN JULI' di baris 1-40 dan tabel 'JANUARI' di baris 41+,
+ *    fungsi ini menghapus baris 1-40 sehingga tabel asli JANUARI naik ke baris pertama!
+ * 2. Memastikan judul di baris 1 berbunyi 'DAFTAR HADIR PESERTA DIDIK BULAN JANUARI' dan baris 2 'TAHUN AJARAN 2024/2025'
+ * 3. Memperbaiki tahun tanda tangan menjadi 2025.
+ */
+export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
+  // 1. Ambil metadata untuk mendapatkan sheetId ABSENSI
+  const metaRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!metaRes.ok) throw new Error('Gagal mengakses metadata spreadsheet');
+  const metaData = await metaRes.json();
+  const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
+  const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
+
+  // 2. Baca isi baris A1:AK80
+  const url = `${SHEETS_API_BASE}/${spreadsheetId}/values/ABSENSI!A1:AK80?valueRenderOption=FORMATTED_VALUE`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error('Gagal membaca data spreadsheet');
+  const data = await res.json();
+  const rows = data.values || [];
+
+  // Analisis tabel atas (baris 0 s/d 39) dan tabel bawah (baris 40+)
+  const top40Text = rows.slice(0, 40).map((r) => r.join(' ')).join(' ').toUpperCase();
+  const bot40Text = rows.slice(40, 80).map((r) => r.join(' ')).join(' ').toUpperCase();
+
+  const topHasJuli = top40Text.includes('JULI');
+  const botHasJanuari = bot40Text.includes('JANUARI') || bot40Text.includes('NAMA SISWA');
+
+  // KASUS A: Ada tabel uji coba JULI di atas dan tabel asli JANUARI di bawah
+  if (topHasJuli && botHasJanuari) {
+    const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: 0,
+                endIndex: 40
+              }
+            }
+          }
+        ]
+      })
+    });
+
+    if (!deleteRes.ok) {
+      const err = await deleteRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
+    }
+
+    return {
+      success: true,
+      message: 'Tabel bulan Juli berhasil dibersihkan! Tabel asli Januari kini berada di urutan pertama paling atas.'
+    };
+  }
+
+  // KASUS B: Ubah teks BULAN JULI menjadi BULAN JANUARI pada sel yang ada
+  const updateData = [];
+  rows.forEach((row, rIdx) => {
+    row.forEach((cell, cIdx) => {
+      if (typeof cell === 'string') {
+        let modified = false;
+        let newCell = cell;
+
+        if (newCell.toUpperCase().includes('BULAN JULI')) {
+          newCell = newCell.replace(/BULAN\s+JULI/gi, 'BULAN JANUARI');
+          modified = true;
+        }
+        if (newCell.includes('JULI 2024') || newCell.includes('Juli 2024')) {
+          newCell = newCell.replace(/JULI\s+2024/gi, 'Januari 2025');
+          modified = true;
+        }
+
+        if (modified) {
+          let colStr = '';
+          let tempC = cIdx;
+          while (tempC >= 0) {
+            colStr = String.fromCharCode(65 + (tempC % 26)) + colStr;
+            tempC = Math.floor(tempC / 26) - 1;
+          }
+          updateData.push({
+            range: `ABSENSI!${colStr}${rIdx + 1}`,
+            values: [[newCell]]
+          });
+        }
+      }
+    });
+  });
+
+  if (updateData.length > 0) {
+    const updateRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data: updateData
+      })
+    });
+    if (!updateRes.ok) {
+      const err = await updateRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Gagal memperbarui judul di sheet');
+    }
+  }
+
+  return { success: true, message: 'Judul dan urutan bulan berhasil disesuaikan ke Januari (Semester 2)!' };
+}
+
+export const fixSpreadsheetMonthTitleAndOrder = fixSemester2Spreadsheet;
+
