@@ -137,6 +137,6 @@ function autoSavePlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [react(), autoSavePlugin()],
 });

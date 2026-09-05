@@ -477,12 +477,16 @@ export default function App() {
           setTimeout(() => setSyncToast(null), 6000);
         })
         .catch((err) => {
+          let errorMsg = err.message || 'Gagal mengirim data ke Google Sheets API.';
+          if (errorMsg.toLowerCase().includes('not supported') || errorMsg.includes('FAILED_PRECONDITION')) {
+            errorMsg = 'File di Google Drive masih berformat Excel (.XLSX). Silakan buka file tersebut di browser lalu klik menu Berkas/File > "Simpan sebagai Google Spreadsheet".';
+          }
           setSyncToast({
             type: 'error',
             title: 'Gagal Menyinkron ke Google Sheets',
-            message: err.message || 'Gagal mengirim data ke Google Sheets API.'
+            message: errorMsg
           });
-          setTimeout(() => setSyncToast(null), 6000);
+          setTimeout(() => setSyncToast(null), 9000);
         });
     } else if (sheetConfig.scriptUrl) {
       setSyncToast({
@@ -525,11 +529,11 @@ export default function App() {
         });
     } else {
       setSyncToast({
-        type: 'success',
-        title: `Bulan ${name.toUpperCase()} Berhasil Ditambahkan!`,
-        message: `Tabel bulan baru aktif di ZeenQ. Hubungkan ke Google Sheets via tombol "Konek Google Sheet" agar langsung tembus ke Google Drive Anda.`
+        type: 'warning',
+        title: `Bulan ${name.toUpperCase()} Ditambahkan (Belum Konek Google)`,
+        message: `Tabel bulan baru sudah aktif di aplikasi. Agar data otomatis masuk ke Google Spreadsheet online, silakan klik tombol biru [Hubungkan Google] di pojok kanan atas.`
       });
-      setTimeout(() => setSyncToast(null), 5000);
+      setTimeout(() => setSyncToast(null), 6000);
     }
   };
 

@@ -5,17 +5,17 @@
  */
 
 export const DEFAULT_SPREADSHEET_URL =
-  'https://docs.google.com/spreadsheets/d/1AdM3GE4xeUzW1d_yqcU5N2x_kaSJg8Re/edit?gid=272037099#gid=272037099';
+  'https://docs.google.com/spreadsheets/d/1-TcO9i3_73Rh-uWSSZTYDb14BTV2vhq2/edit?gid=272037099#gid=272037099';
 
 export const DEFAULT_CONFIG = {
-  id: '1AdM3GE4xeUzW1d_yqcU5N2x_kaSJg8Re',
+  id: '1-TcO9i3_73Rh-uWSSZTYDb14BTV2vhq2',
   gid: '272037099',
-  title: 'DAFTAR HADIR 2C SEMESTER 1',
+  title: 'DAFTAR HADIR 1C SEMESTER 2',
   url: DEFAULT_SPREADSHEET_URL,
   knownTabs: [
     { name: 'ABSENSI', gid: '272037099' },
     { name: 'REKAP ABSEN', gid: '490778033' },
-    { name: 'MUTASI SISWA', gid: '1395406134' }
+    { name: 'MUTASI', gid: '1395406134' }
   ]
 };
 
@@ -155,7 +155,13 @@ export function getSavedConfig() {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_CONFIG);
     if (saved) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      // Auto-migrate if user was previously pointing to the old semester 1 sheet
+      if (parsed.id === '1AdM3GE4xeUzW1d_yqcU5N2x_kaSJg8Re') {
+        saveConfig(DEFAULT_CONFIG);
+        return { ...DEFAULT_CONFIG };
+      }
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
     console.warn('Error reading saved sheet config:', e);
@@ -190,9 +196,17 @@ export function getPresets() {
   // Default presets
   return [
     {
-      id: 'default-2c',
-      name: 'Kelas 2C - SDN Pulo 01 (Semester 1)',
+      id: 'default-1c-sem2',
+      name: 'Kelas 1C - Semester 2 (Aktif)',
       url: DEFAULT_SPREADSHEET_URL,
+      sheetId: '1-TcO9i3_73Rh-uWSSZTYDb14BTV2vhq2',
+      gid: '272037099',
+      dateAdded: new Date().toISOString()
+    },
+    {
+      id: 'default-2c-sem1',
+      name: 'Kelas 2C - Semester 1 (Arsip)',
+      url: 'https://docs.google.com/spreadsheets/d/1AdM3GE4xeUzW1d_yqcU5N2x_kaSJg8Re/edit?gid=272037099#gid=272037099',
       sheetId: '1AdM3GE4xeUzW1d_yqcU5N2x_kaSJg8Re',
       gid: '272037099',
       dateAdded: new Date().toISOString()
