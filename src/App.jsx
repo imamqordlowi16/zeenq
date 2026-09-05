@@ -512,20 +512,9 @@ export default function App() {
         ? ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
         : ['JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER', 'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'];
 
-      // Filter out stray empty Juli if this is a Semester 2 spreadsheet
-      let filtered = [...prev.months, newMonth];
-      if (isSem2) {
-        filtered = filtered.filter((m) => {
-          if (m.name.toUpperCase() === 'JULI') {
-            const hasActivity = m.students?.some((s) => (s.hadir || 0) + (s.sakit || 0) + (s.izin || 0) + (s.alpa || 0) > 0);
-            return hasActivity;
-          }
-          return true;
-        });
-      }
-
       // Sort strictly according to calendar sequence
-      filtered.sort((a, b) => {
+      const updatedList = [...prev.months, newMonth];
+      updatedList.sort((a, b) => {
         const idxA = order.indexOf(a.name.toUpperCase());
         const idxB = order.indexOf(b.name.toUpperCase());
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -534,7 +523,7 @@ export default function App() {
         return (a.monthOrder || 0) - (b.monthOrder || 0);
       });
 
-      const updated = { ...prev, months: filtered };
+      const updated = { ...prev, months: updatedList };
       persistAttendance(updated);
       return updated;
     });
