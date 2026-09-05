@@ -17,7 +17,9 @@ export default function GoogleAuthModal({
   onClose,
   googleUser,
   onLoginSuccess,
-  onLogout
+  onLogout,
+  onCleanUpperRows,
+  isCleaning
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -256,6 +258,34 @@ export default function GoogleAuthModal({
                 </div>
                 Setiap kali Anda menambah bulan baru atau mengisi presensi di ZeenQ, perubahannya langsung dikirim ke file Google Spreadsheet Anda.
               </div>
+
+              {onCleanUpperRows && (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    background: 'var(--bg-surface-subtle)',
+                    border: '1px solid var(--border-color)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}
+                >
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    🛠️ <strong>Pembersihan Format</strong>: Jika baris 1 s/d 40 di Google Sheet Anda rusak karena pengujian awal, klik tombol ini untuk menghapusnya secara otomatis. Template resmi sekolah akan langsung naik ke baris paling atas.
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={onCleanUpperRows}
+                    disabled={isCleaning}
+                    style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <RefreshCw size={13} className={isCleaning ? 'spin-anim' : ''} />
+                    <span>{isCleaning ? 'Sedang Membersihkan...' : '🧹 Bersihkan Tabel Rusak (Baris 1-40)'}</span>
+                  </button>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <button

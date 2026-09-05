@@ -11,7 +11,7 @@ import QuickTextInputModal from './components/QuickTextInputModal';
 import GoogleScriptSetupModal from './components/GoogleScriptSetupModal';
 import GoogleAuthModal from './components/GoogleAuthModal';
 import { getStoredGoogleSession, clearGoogleSession } from './services/googleAuthService';
-import { appendMonthToGoogleSheet } from './services/googleSheetsApiService';
+import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues } from './services/googleSheetsApiService';
 import confetti from 'canvas-confetti';
 import {
   getSavedConfig,
@@ -38,7 +38,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 
 export default function App() {
@@ -148,12 +149,48 @@ export default function App() {
 
       // 2. Fetch baseline data from spreadsheet link
       try {
-        const mainRes = await fetchSheetCSV(config.id, config.gid || '0');
-        setIsFromCache(mainRes.fromCache);
-        const parsedAttendance = parseAttendanceSheet(mainRes.csvText, config.title || '');
+        let csvText = '';
+        let fromCache = false;
 
-        setAttendanceData(parsedAttendance);
-        localStorage.setItem(masterKey, JSON.stringify(parsedAttendance));
+        // Jika login Google aktif, coba ambil data live resmi via Google Sheets API
+        if (googleToken) {
+          try {
+            const liveRows = await fetchLiveSheetValues(config.id, 'ABSENSI', googleToken);
+            if (liveRows && liveRows.length > 5) {
+              csvText = liveRows
+                .map((row) => row.map((c) => `"${String(c || '').replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+            }
+          } catch (liveErr) {
+            console.warn('Live Google Sheets API fetch warning, fallback to CSV:', liveErr);
+          }
+        }
+
+        if (!csvText) {
+          const mainRes = await fetchSheetCSV(config.id, config.gid || '0');
+          csvText = mainRes.csvText;
+          fromCache = mainRes.fromCache;
+        }
+
+        setIsFromCache(fromCache);
+        const parsedAttendance = parseAttendanceSheet(csvText, config.title || '');
+
+        // Pertahankan bulan yang baru ditambahkan jika belum masuk ke file online
+        setAttendanceData((prev) => {
+          if (!prev || !prev.months || prev.months.length === 0) {
+            localStorage.setItem(masterKey, JSON.stringify(parsedAttendance));
+            return parsedAttendance;
+          }
+          const mergedMonths = [...(parsedAttendance.months || [])];
+          prev.months.forEach((oldM) => {
+            if (!mergedMonths.some((m) => m.id === oldM.id)) {
+              mergedMonths.push(oldM);
+            }
+          });
+          const merged = { ...parsedAttendance, months: mergedMonths };
+          localStorage.setItem(masterKey, JSON.stringify(merged));
+          return merged;
+        });
 
         if (parsedAttendance.months && parsedAttendance.months.length > 0) {
           setSelectedMonth((prev) => {
@@ -271,6 +308,46 @@ export default function App() {
     };
     handleSaveConfig(newCfg);
     setIsConfigOpen(false);
+  };
+
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  const handleCleanUpperRows = async () => {
+    if (!googleToken) return;
+    if (
+      !window.confirm(
+        'Hapus baris 1 s/d 40 yang rusak di Google Sheet Anda?\n\nSetelah dihapus, tabel template resmi sekolah (Januari) otomatis naik menjadi baris paling atas.'
+      )
+    ) {
+      return;
+    }
+
+    setIsCleaning(true);
+    setSyncToast({
+      type: 'loading',
+      title: 'Membersihkan Google Sheets...',
+      message: 'Menghapus baris 1 s/d 40 yang rusak di spreadsheet Anda.'
+    });
+
+    try {
+      await deleteCorruptedUpperRows(sheetConfig.id, googleToken);
+      setSyncToast({
+        type: 'success',
+        title: 'Berhasil Dibersihkan!',
+        message: 'Baris 1-40 berhasil dihapus. Sekarang template presensi resmi sekolah sudah rapi di paling atas.'
+      });
+      setTimeout(() => setSyncToast(null), 7000);
+      loadSheetData(sheetConfig, true);
+    } catch (err) {
+      setSyncToast({
+        type: 'error',
+        title: 'Gagal Membersihkan Baris',
+        message: err.message || 'Terjadi kesalahan saat menghapus baris di Google Sheets.'
+      });
+      setTimeout(() => setSyncToast(null), 8000);
+    } finally {
+      setIsCleaning(false);
+    }
   };
 
   // Real-time Attendance Mark Updater
@@ -819,7 +896,66 @@ export default function App() {
         googleUser={googleUser}
         onLoginSuccess={handleLoginSuccess}
         onLogout={handleLogoutGoogle}
+        onCleanUpperRows={handleCleanUpperRows}
+        isCleaning={isCleaning}
       />
+
+      {/* Toast Notifikasi Status Sinkronisasi Google Sheets */}
+      {syncToast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            minWidth: '320px',
+            maxWidth: '430px',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            background:
+              syncToast.type === 'error'
+                ? 'var(--status-alpa-bg)'
+                : syncToast.type === 'warning'
+                ? '#FEF3C7'
+                : 'var(--bg-surface)',
+            border: `1px solid ${
+              syncToast.type === 'error'
+                ? 'var(--status-alpa)'
+                : syncToast.type === 'warning'
+                ? '#F59E0B'
+                : 'var(--accent-emerald)'
+            }`,
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px'
+          }}
+        >
+          {syncToast.type === 'loading' ? (
+            <RefreshCw size={20} className="spin-anim" style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
+          ) : syncToast.type === 'error' ? (
+            <AlertCircle size={20} style={{ color: 'var(--status-alpa)', flexShrink: 0, marginTop: '2px' }} />
+          ) : syncToast.type === 'warning' ? (
+            <AlertCircle size={20} style={{ color: '#F59E0B', flexShrink: 0, marginTop: '2px' }} />
+          ) : (
+            <CheckCircle2 size={20} style={{ color: 'var(--accent-emerald)', flexShrink: 0, marginTop: '2px' }} />
+          )}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '2px', color: 'var(--text-main)' }}>
+              {syncToast.title}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+              {syncToast.message}
+            </div>
+          </div>
+          <button
+            onClick={() => setSyncToast(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,58 +29,78 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
   const cleanYear = String(year).includes('/') ? year : `${year}/${Number(year) + 1}`;
   const yearNum = parseInt(String(year).split('/')[0], 10) || 2026;
 
-  // Bangun baris data tabel bulan baru persis sesuai template resmi sekolah
+  // Bangun baris data tabel bulan baru persis sesuai template resmi sekolah (Dua Tingkat Header)
   const rows = [];
 
-  // Baris pemisah antar tabel
-  rows.push([]);
-  rows.push([]);
-
-  // 1. Judul Tabel Bulan
+  // 1. Judul Tabel Bulan (Baris pertama agar range deterministik 100%)
   rows.push([`DAFTAR HADIR PESERTA DIDIK BULAN ${monthName.toUpperCase()} TAHUN AJARAN ${cleanYear}`]);
 
-  // 2. Baris Header Kolom (38 Kolom: NO, NAMA SISWA, 1..31, S, I, A, JML HADIR, PERSENTASE)
-  const headerRow = ['NO', 'NAMA SISWA'];
+  // 2. Baris Header Tingkat 1 (Top Header: No, NAMA SISWA, 1..31, JUMLAH)
+  const headerTop = ['No', 'NAMA SISWA'];
   for (let d = 1; d <= 31; d++) {
-    headerRow.push(d <= totalDays ? String(d) : '');
+    headerTop.push(d <= totalDays ? String(d) : '');
   }
-  headerRow.push('S', 'I', 'A', 'JML HADIR', 'PERSENTASE');
-  rows.push(headerRow);
+  headerTop.push('JUMLAH', '', '', ''); // 4 kolom di bawah payung JUMLAH
+  rows.push(headerTop);
 
-  // 3. Baris Siswa (28 Siswa)
+  // 3. Baris Header Tingkat 2 (Sub Header: Sakit, Izin, Alpa, Jumlah)
+  const headerSub = ['', ''];
+  for (let d = 1; d <= 31; d++) {
+    headerSub.push('');
+  }
+  headerSub.push('Sakit', 'Izin', 'Alpa', 'Jumlah');
+  rows.push(headerSub);
+
+  // 4. Baris Siswa (Semua siswa berurutan tanpa celah)
   students.forEach((student, idx) => {
     const studentRow = [student.no || idx + 1, student.name];
     for (let d = 1; d <= 31; d++) {
-      studentRow.push(d <= totalDays ? '•' : ''); // Tanda titik hadir aktif
+      studentRow.push(d <= totalDays ? '•' : '');
     }
-    studentRow.push(0, 0, 0, totalDays, '100%'); // S, I, A, Jml Hadir, Persentase
+    studentRow.push(0, 0, 0, 0); // Sakit, Izin, Alpa, Jumlah
     rows.push(studentRow);
   });
 
-  // 4. Baris Tanda Tangan & Pengesahan
+  // 5. Baris Rekapitulasi Bawah (JUMLAH, PERSENTASE, KEHADIRAN)
+  const totalRow = ['JUMLAH'];
+  for (let i = 1; i <= 32; i++) totalRow.push('');
+  totalRow.push(0, 0, 0, 0);
+  rows.push(totalRow);
+
+  const pctRow = ['PERSENTASE (%)'];
+  for (let i = 1; i <= 32; i++) pctRow.push('');
+  pctRow.push('0.00', '0.00', '0.00', '0.00');
+  rows.push(pctRow);
+
+  const hadirRow = ['KEHADIRAN (%)'];
+  for (let i = 1; i <= 35; i++) hadirRow.push('');
+  hadirRow.push('100.00');
+  rows.push(hadirRow);
+
+  // 6. Baris Tanda Tangan & Pengesahan
   rows.push([]);
-  const sigRow1 = Array(38).fill('');
+  const sigRow1 = Array(37).fill('');
   sigRow1[1] = 'Mengetahui,';
-  sigRow1[30] = `Jakarta, ${monthName} ${yearNum}`;
+  sigRow1[28] = `Jakarta, ${monthName} ${yearNum}`;
   rows.push(sigRow1);
 
-  const sigRow2 = Array(38).fill('');
+  const sigRow2 = Array(37).fill('');
   sigRow2[1] = 'Kepala Sekolah';
-  sigRow2[30] = 'Guru Kelas';
+  sigRow2[28] = 'Guru Kelas';
   rows.push(sigRow2);
 
   rows.push([]);
   rows.push([]);
   rows.push([]);
 
-  const sigRow3 = Array(38).fill('');
+  const sigRow3 = Array(37).fill('');
   sigRow3[1] = 'Venez Wella, M.Pd';
-  sigRow3[30] = 'Jeni Oktaviani, S.Pd';
+  sigRow3[28] = 'Jeni Oktaviani, S.Pd';
   rows.push(sigRow3);
 
-  const sigRow4 = Array(38).fill('');
+  const sigRow4 = Array(37).fill('');
   sigRow4[1] = 'NIP. 19820129014122002';
-  sigRow4[30] = 'NIP. 199610182022212009';
+  sigRow4[28] = 'NIP. 199610182022212009';
   rows.push(sigRow4);
 
   rows.push([]);
@@ -138,7 +158,7 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
 
   const result = await response.json();
 
-  // Terapkan format otomatis (Border, Warna Header, Kolom Hari Minggu Merah, dsb)
+  // Terapkan format visual 100% persis seperti tabel template asli
   if (result.updates?.updatedRange) {
     await formatAppendedMonthTable(
       spreadsheetId,
@@ -172,26 +192,27 @@ const INDONESIAN_MONTH_INDEX = {
   DESEMBER: 11
 };
 
-function getSundaysInMonth(monthName, yearNum) {
+function getWeekendDaysInMonth(monthName, yearNum) {
   const m = INDONESIAN_MONTH_INDEX[monthName.toUpperCase()];
   if (m === undefined) return [];
-  const sundays = [];
+  const weekends = [];
   const total = new Date(yearNum, m + 1, 0).getDate();
   for (let d = 1; d <= total; d++) {
-    if (new Date(yearNum, m, d).getDay() === 0) {
-      sundays.push(d);
+    const dayOfWeek = new Date(yearNum, m, d).getDay();
+    // 0 = Minggu (Sunday), 6 = Sabtu (Saturday)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      weekends.push(d);
     }
   }
-  return sundays;
+  return weekends;
 }
 
 /**
- * Menerapkan format visual (Borders, Warna Header, Kolom Minggu Merah, Alignment)
- * agar 100% persis mengikuti format tabel presensi yang sudah ada di spreadsheet.
+ * Menerapkan format visual presisi (Borders, Warna Header Peach, Kolom Libur Pink, Merge Header Dua Tingkat, Lebar Kolom)
+ * 100% persis mengikuti format tabel presensi asli di spreadsheet Anda.
  */
 async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, yearNum, studentCount, accessToken) {
   try {
-    // 1. Ambil sheetId numerik untuk tab ABSENSI
     const metaRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
@@ -200,78 +221,128 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
     const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
     const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
 
-    // 2. Parse rentang baris dari updatedRange (contoh: "ABSENSI!A45:AL85" atau "'ABSENSI'!A45:AL85")
     const match = updatedRange?.match(/!([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)/);
     if (!match) return;
-    const startRow1 = parseInt(match[2], 10); // 1-indexed (misal: 45)
-    const endRow1 = parseInt(match[4], 10);
+    const startRow1 = parseInt(match[2], 10); // 1-indexed
 
-    // Di dalam data yang di-append:
-    // Offset 0 & 1: pemisah baris kosong
-    // Offset 2: Judul Bulan
-    // Offset 3: Header Kolom (NO, NAMA SISWA, 1..31...)
-    // Offset 4 s.d. 4 + studentCount - 1: Baris Siswa (28 siswa)
-    const baseIndex = startRow1 - 1; // 0-indexed
-    const titleRowIndex = baseIndex + 2;
-    const headerRowIndex = baseIndex + 3;
-    const firstStudentRowIndex = headerRowIndex + 1;
-    const lastStudentRowIndex = firstStudentRowIndex + studentCount;
+    // Baris pertama yang diappend adalah baris Judul Tabel
+    const titleRow = startRow1 - 1; // 0-indexed
+    const headerTopRow = titleRow + 1;
+    const headerSubRow = titleRow + 2;
+    const firstStudentRow = titleRow + 3;
+    const lastStudentRow = firstStudentRow + studentCount; // exclusive
+    const jumlahRow = lastStudentRow;
+    const persentaseRow = jumlahRow + 1;
+    const kehadiranRow = persentaseRow + 1;
+    const tableEndRow = kehadiranRow + 1; // exclusive
 
     const requests = [];
 
-    // A. Salin format dari tabel pertama yang sudah ada (copyPaste PASTE_FORMAT)
+    // 0. Atur Lebar Kolom agar Proporsional & Rapi
     requests.push({
-      copyPaste: {
-        source: {
-          sheetId: sheetId,
-          startRowIndex: 0,
-          endRowIndex: Math.min(35, headerRowIndex),
-          startColumnIndex: 0,
-          endColumnIndex: 38
-        },
-        destination: {
-          sheetId: sheetId,
-          startRowIndex: titleRowIndex,
-          endRowIndex: lastStudentRowIndex + 8,
-          startColumnIndex: 0,
-          endColumnIndex: 38
-        },
-        pasteType: 'PASTE_FORMAT'
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+        properties: { pixelSize: 35 },
+        fields: 'pixelSize'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
+        properties: { pixelSize: 220 },
+        fields: 'pixelSize'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 33 },
+        properties: { pixelSize: 26 },
+        fields: 'pixelSize'
+      }
+    });
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS', startIndex: 33, endIndex: 37 },
+        properties: { pixelSize: 38 },
+        fields: 'pixelSize'
       }
     });
 
-    // B. Garis Border Kotak Tabel Lengkap (Garis tepi & kisi-kisi dalam)
+    // 1. Merge Header Kolom Dua Tingkat:
+    // Kolom No: merge vertikal
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: headerTopRow, endRowIndex: headerSubRow + 1, startColumnIndex: 0, endColumnIndex: 1 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+    // Kolom NAMA SISWA: merge vertikal
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: headerTopRow, endRowIndex: headerSubRow + 1, startColumnIndex: 1, endColumnIndex: 2 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+    // Kolom Tanggal 1..31: merge vertikal masing-masing kolom
+    for (let c = 2; c <= 32; c++) {
+      requests.push({
+        mergeCells: {
+          range: { sheetId, startRowIndex: headerTopRow, endRowIndex: headerSubRow + 1, startColumnIndex: c, endColumnIndex: c + 1 },
+          mergeType: 'MERGE_ALL'
+        }
+      });
+    }
+    // Kolom JUMLAH: merge horizontal melingkupi 4 kolom (Sakit, Izin, Alpa, Jumlah)
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: headerTopRow, endRowIndex: headerTopRow + 1, startColumnIndex: 33, endColumnIndex: 37 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+
+    // 2. Merge Baris Rekapitulasi:
+    // JUMLAH
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: jumlahRow, endRowIndex: jumlahRow + 1, startColumnIndex: 0, endColumnIndex: 33 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+    // PERSENTASE (%)
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: persentaseRow, endRowIndex: persentaseRow + 1, startColumnIndex: 0, endColumnIndex: 33 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+    // KEHADIRAN (%)
+    requests.push({
+      mergeCells: {
+        range: { sheetId, startRowIndex: kehadiranRow, endRowIndex: kehadiranRow + 1, startColumnIndex: 0, endColumnIndex: 36 },
+        mergeType: 'MERGE_ALL'
+      }
+    });
+
+    // 3. Garis Border Hitam Solid Penuh untuk Seluruh Kotak Tabel
     requests.push({
       updateBorders: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: headerRowIndex,
-          endRowIndex: lastStudentRowIndex,
-          startColumnIndex: 0,
-          endColumnIndex: 38
-        },
+        range: { sheetId, startRowIndex: headerTopRow, endRowIndex: tableEndRow, startColumnIndex: 0, endColumnIndex: 37 },
         top: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
         bottom: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
         left: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
         right: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
-        innerHorizontal: { style: 'SOLID', color: { red: 0.3, green: 0.3, blue: 0.3 } },
-        innerVertical: { style: 'SOLID', color: { red: 0.3, green: 0.3, blue: 0.3 } }
+        innerHorizontal: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        innerVertical: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } }
       }
     });
 
-    // C. Format Warna Background Header (Peach/Orange lembut sesuai format sekolah)
+    // 4. Background Warna Header (Peach/Orange Lembut #FCE5CD)
     requests.push({
       repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: headerRowIndex,
-          endRowIndex: headerRowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: 38
-        },
+        range: { sheetId, startRowIndex: headerTopRow, endRowIndex: headerSubRow + 1, startColumnIndex: 0, endColumnIndex: 37 },
         cell: {
           userEnteredFormat: {
-            backgroundColor: { red: 0.98, green: 0.89, blue: 0.84 },
+            backgroundColor: { red: 0.988, green: 0.898, blue: 0.839 },
             textFormat: { bold: true, fontSize: 9, fontFamily: 'Arial' },
             horizontalAlignment: 'CENTER',
             verticalAlignment: 'MIDDLE'
@@ -281,23 +352,17 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
       }
     });
 
-    // D. Warna Kolom Hari Minggu (Merah Muda / Pink khas hari libur sesuai tabel asli)
-    const sundays = getSundaysInMonth(monthName, yearNum);
-    sundays.forEach((dayNum) => {
-      const colIdx = 1 + dayNum; // Kolom C = Day 1
+    // 5. Background Warna Kolom Akhir Pekan (Sabtu & Minggu: Pink/Merah Muda #EA9999)
+    const weekends = getWeekendDaysInMonth(monthName, yearNum);
+    weekends.forEach((dayNum) => {
+      const colIdx = 1 + dayNum; // Kolom C = Day 1 (col index 2)
       if (colIdx < 33) {
         requests.push({
           repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: headerRowIndex,
-              endRowIndex: lastStudentRowIndex,
-              startColumnIndex: colIdx,
-              endColumnIndex: colIdx + 1
-            },
+            range: { sheetId, startRowIndex: headerTopRow, endRowIndex: lastStudentRow, startColumnIndex: colIdx, endColumnIndex: colIdx + 1 },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.94, green: 0.65, blue: 0.65 } // Pink/red hari libur Minggu
+                backgroundColor: { red: 0.945, green: 0.647, blue: 0.647 }
               }
             },
             fields: 'userEnteredFormat.backgroundColor'
@@ -306,29 +371,52 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
       }
     });
 
-    // E. Format Judul Tabel (Tebal, 10pt)
+    // 6. Perataan Format Teks:
+    // Kolom No: Center
     requests.push({
       repeatCell: {
-        range: {
-          sheetId: sheetId,
-          startRowIndex: titleRowIndex,
-          endRowIndex: titleRowIndex + 1,
-          startColumnIndex: 0,
-          endColumnIndex: 38
-        },
-        cell: {
-          userEnteredFormat: {
-            textFormat: { bold: true, fontSize: 10, fontFamily: 'Arial' },
-            horizontalAlignment: 'LEFT',
-            verticalAlignment: 'MIDDLE'
-          }
-        },
+        range: { sheetId, startRowIndex: firstStudentRow, endRowIndex: lastStudentRow, startColumnIndex: 0, endColumnIndex: 1 },
+        cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 9 } } },
+        fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)'
+      }
+    });
+    // Kolom Nama Siswa: Left, Middle
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: firstStudentRow, endRowIndex: lastStudentRow, startColumnIndex: 1, endColumnIndex: 2 },
+        cell: { userEnteredFormat: { horizontalAlignment: 'LEFT', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 9 } } },
+        fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)'
+      }
+    });
+    // Kolom Tanggal (2..32) & Rekap (33..36): Center, Middle
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: firstStudentRow, endRowIndex: lastStudentRow, startColumnIndex: 2, endColumnIndex: 37 },
+        cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 9 } } },
+        fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)'
+      }
+    });
+
+    // 7. Format Baris Rekapitulasi (JUMLAH, PERSENTASE, KEHADIRAN): Bold, Center
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: jumlahRow, endRowIndex: tableEndRow, startColumnIndex: 0, endColumnIndex: 37 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 9 }, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' } },
         fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
       }
     });
 
-    // Kirim batchUpdate styling ke Google Sheets API
-    await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+    // 8. Judul Tabel: Bold, 10pt
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: titleRow, endRowIndex: titleRow + 1, startColumnIndex: 0, endColumnIndex: 37 },
+        cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 10, fontFamily: 'Arial' }, horizontalAlignment: 'LEFT', verticalAlignment: 'MIDDLE' } },
+        fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    });
+
+    // Kirim seluruh perintah batchUpdate ke Google Sheets API
+    const batchRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -336,9 +424,70 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
       },
       body: JSON.stringify({ requests })
     });
+
+    if (!batchRes.ok) {
+      const errJson = await batchRes.json().catch(() => ({}));
+      console.warn('[formatAppendedMonthTable Warning]', errJson);
+    }
   } catch (styleErr) {
     console.warn('Styling batchUpdate warning:', styleErr);
   }
+}
+
+/**
+ * Menghapus baris 1 s/d 40 di sheet ABSENSI (membersihkan tabel percobaan lama yang rusak)
+ */
+export async function deleteCorruptedUpperRows(spreadsheetId, accessToken) {
+  const metaRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!metaRes.ok) throw new Error('Gagal mengakses metadata spreadsheet');
+  const metaData = await metaRes.json();
+  const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
+  const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
+
+  const res = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: 0,
+              endIndex: 40
+            }
+          }
+        }
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Gagal membersihkan baris lama.');
+  }
+  return { success: true, message: 'Baris 1-40 yang rusak berhasil dibersihkan dari Google Sheets!' };
+}
+
+/**
+ * Mengambil baris data live langsung dari Google Sheets API
+ */
+export async function fetchLiveSheetValues(spreadsheetId, sheetTitle = 'ABSENSI', accessToken) {
+  const url = `${SHEETS_API_BASE}/${spreadsheetId}/values/${encodeURIComponent(sheetTitle)}?valueRenderOption=FORMATTED_VALUE`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: Gagal mengambil data live dari Google Sheet`);
+  }
+  const data = await res.json();
+  return data.values || [];
 }
 
 /**
