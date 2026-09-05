@@ -11,7 +11,7 @@ import QuickTextInputModal from './components/QuickTextInputModal';
 import GoogleScriptSetupModal from './components/GoogleScriptSetupModal';
 import GoogleAuthModal from './components/GoogleAuthModal';
 import { getStoredGoogleSession, clearGoogleSession } from './services/googleAuthService';
-import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues, fixSemester2Spreadsheet } from './services/googleSheetsApiService';
+import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues, fixSemester2Spreadsheet, queueAttendanceMarkUpdate, onSheetSyncStatusChange } from './services/googleSheetsApiService';
 import confetti from 'canvas-confetti';
 import {
   getSavedConfig,
@@ -350,13 +350,18 @@ export default function App() {
     }
   };
 
-  // Real-time Attendance Mark Updater
+  // Real-time Attendance Mark Updater (Tersimpan Instan & Otomatis Sinkron ke Google Sheets)
   const handleUpdateAttendance = (monthId, studentNo, dayNum, newMark) => {
     if (!attendanceData) return;
+
+    let targetStudent = null;
+    let targetMonth = null;
+    let studentStats = null;
 
     setAttendanceData((prev) => {
       const newMonths = prev.months.map((m) => {
         if (m.id !== monthId) return m;
+        targetMonth = m;
 
         const updatedStudents = m.students.map((s) => {
           if (s.no !== studentNo) return s;
@@ -378,7 +383,7 @@ export default function App() {
           const effective = h + sk + iz + al;
           const rate = effective > 0 ? Math.round((h / effective) * 100) : 100;
 
-          return {
+          const updatedStud = {
             ...s,
             days: updatedDays,
             hadir: h,
@@ -388,6 +393,11 @@ export default function App() {
             effectiveDays: effective,
             attendanceRate: rate
           };
+
+          targetStudent = updatedStud;
+          studentStats = { sakit: sk, izin: iz, alpa: al };
+
+          return updatedStud;
         });
 
         let totH = 0,
@@ -424,25 +434,42 @@ export default function App() {
       };
 
       persistAttendance(updated);
-
-      // Cloud sync to Google Sheets if connected
-      if (sheetConfig.scriptUrl) {
-        const monthObj = attendanceData.months.find((m) => m.id === monthId);
-        const studentObj = monthObj?.students?.find((s) => s.no === studentNo);
-        if (monthObj && studentObj) {
-          syncAttendanceMarkToSheet(sheetConfig.scriptUrl, {
-            monthName: monthObj.name,
-            studentName: studentObj.name,
-            studentNo: studentNo,
-            dayNum: dayNum,
-            day: dayNum,
-            mark: newMark
-          }).catch((err) => console.warn('Cloud sync error:', err));
-        }
-      }
-
       return updated;
     });
+
+    // 1. Live Sync Langsung ke Google Sheets via REST API (jika login Google aktif)
+    if (googleToken && targetStudent && targetMonth) {
+      const rowIndex =
+        targetStudent.rowIndex ||
+        (targetMonth.headerRowIndex ? targetMonth.headerRowIndex + 1 + (targetStudent.no || studentNo) : null);
+      const colIdx = targetMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
+
+      if (rowIndex) {
+        queueAttendanceMarkUpdate(
+          sheetConfig.id,
+          {
+            rowIndex,
+            colIdx,
+            dayNum,
+            mark: newMark,
+            studentStats
+          },
+          googleToken
+        );
+      }
+    }
+
+    // 2. Cloud sync ke Google Apps Script Webhook (jika scriptUrl terpasang)
+    if (sheetConfig.scriptUrl && targetMonth && targetStudent) {
+      syncAttendanceMarkToSheet(sheetConfig.scriptUrl, {
+        monthName: targetMonth.name,
+        studentName: targetStudent.name,
+        studentNo: studentNo,
+        dayNum: dayNum,
+        day: dayNum,
+        mark: newMark
+      }).catch((err) => console.warn('Cloud sync error:', err));
+    }
   };
 
   // Add a new custom month dynamically (100% Instant & Permanent + Cloud Sync)

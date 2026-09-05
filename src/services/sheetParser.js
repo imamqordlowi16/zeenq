@@ -317,7 +317,8 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
           alpa: alpaCount,
           hadir: hadirCount,
           effectiveDays,
-          attendanceRate: rate
+          attendanceRate: rate,
+          rowIndex: r + 1
         });
       }
 
@@ -338,9 +339,8 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
       totalAlpa += s.alpa;
     });
 
-    const totalDaysRecorded = totalHadir + totalSakit + totalIzin + totalAlpa;
-    const overallRate =
-      totalDaysRecorded > 0 ? ((totalHadir / totalDaysRecorded) * 100).toFixed(1) : '100.0';
+    const grandTotalActive = totalHadir + totalSakit + totalIzin + totalAlpa;
+    const overallRate = grandTotalActive > 0 ? ((totalHadir / grandTotalActive) * 100).toFixed(1) : '100.0';
 
     // Daily breakdown
     const dailySummary = {};
@@ -380,6 +380,8 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
       students,
       totalStudents,
       dayNumbers,
+      dayColMap,
+      headerRowIndex: headerIdx + 1,
       dailySummary,
       stats: {
         totalHadir,

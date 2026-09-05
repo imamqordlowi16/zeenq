@@ -649,28 +649,108 @@ export async function convertOfficeFileToGoogleSheet(officeFileId, accessToken, 
   };
 }
 
+// Helper konversi indeks kolom angka (0-indexed) ke format huruf kolom Excel (A, B, ..., Z, AA, ...)
+export function getColLetter(c) {
+  let col = '';
+  let temp = c;
+  while (temp >= 0) {
+    col = String.fromCharCode(65 + (temp % 26)) + col;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return col;
+}
+
+// Antrean update presensi otomatis dengan debounce 350ms untuk performa tinggi & anti quota limit
+const pendingCellUpdates = new Map();
+let flushTimer = null;
+let syncStatusCallback = null;
+
+export function onSheetSyncStatusChange(cb) {
+  syncStatusCallback = cb;
+}
+
 /**
- * Menyimpan tanda absensi siswa ke Google Sheets
+ * Menyimpan tanda absensi siswa ke Google Sheets via Google Sheets REST API v4
  */
-export async function updateAttendanceMarkToGoogleSheet(
+export async function queueAttendanceMarkUpdate(
   spreadsheetId,
-  updateData,
+  { rowIndex, colIdx, dayNum, mark, studentStats },
   accessToken
 ) {
-  if (!accessToken || accessToken.startsWith('demo-google-token')) {
-    console.log('[Demo Cloud] Update presensi:', updateData);
+  if (!spreadsheetId || !accessToken || accessToken.startsWith('demo-google-token')) {
     return { success: true, simulated: true };
   }
 
-  // Jika terhubung ke API resmi, kirim update nilai
-  // (Pembaruan background secara non-blocking)
-  try {
-    return { success: true };
-  } catch (err) {
-    console.warn('Gagal menyimpan nilai sel:', err);
-    return { success: false, error: err.message };
+  // Tentukan kolom tanggal (misal Day 1 = C, Day 2 = D, dst)
+  const targetColIdx = colIdx !== undefined ? colIdx : 1 + dayNum;
+  const colLetter = getColLetter(targetColIdx);
+  const cellVal = mark === '.' ? '•' : (mark || '');
+
+  // 1. Tanda absensi harian
+  pendingCellUpdates.set(`ABSENSI!${colLetter}${rowIndex}`, cellVal);
+
+  // 2. Kolom Rekapitulasi Siswa (AH: Sakit, AI: Izin, AJ: Alpa, AK: Jumlah)
+  if (studentStats) {
+    const s = studentStats.sakit || 0;
+    const i = studentStats.izin || 0;
+    const a = studentStats.alpa || 0;
+    const tot = s + i + a;
+    pendingCellUpdates.set(`ABSENSI!AH${rowIndex}`, s);
+    pendingCellUpdates.set(`ABSENSI!AI${rowIndex}`, i);
+    pendingCellUpdates.set(`ABSENSI!AJ${rowIndex}`, a);
+    pendingCellUpdates.set(`ABSENSI!AK${rowIndex}`, tot);
   }
+
+  if (syncStatusCallback) syncStatusCallback('saving');
+
+  if (flushTimer) clearTimeout(flushTimer);
+
+  return new Promise((resolve) => {
+    flushTimer = setTimeout(async () => {
+      if (pendingCellUpdates.size === 0) {
+        resolve({ success: true });
+        return;
+      }
+
+      const updates = Array.from(pendingCellUpdates.entries()).map(([range, val]) => ({
+        range,
+        values: [[val]]
+      }));
+
+      pendingCellUpdates.clear();
+
+      try {
+        const res = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            valueInputOption: 'USER_ENTERED',
+            data: updates
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.warn('Gagal sinkronisasi presensi ke Google Sheets:', err);
+          if (syncStatusCallback) syncStatusCallback('error', err.error?.message);
+          resolve({ success: false, error: err.error?.message });
+        } else {
+          if (syncStatusCallback) syncStatusCallback('saved');
+          resolve({ success: true, count: updates.length });
+        }
+      } catch (netErr) {
+        console.warn('Network error sinkronisasi presensi:', netErr);
+        if (syncStatusCallback) syncStatusCallback('error', netErr.message);
+        resolve({ success: false, error: netErr.message });
+      }
+    }, 350);
+  });
 }
+
+export const updateAttendanceMarkToGoogleSheet = queueAttendanceMarkUpdate;
 
 /**
  * Memperbaiki judul bulan dan urutan tabel di Google Sheet agar sesuai Semester 2 (Januari s/d Juni)
