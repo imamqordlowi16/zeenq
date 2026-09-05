@@ -764,7 +764,10 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
     };
   }
 
-  // Jika hanya 1 tabel (atau sudah rapi), pastikan judulnya adalah JANUARI
+  // Pastikan baris 1 dan baris 2 bersih dari teks lama (seperti NIP nyasar), di-merge ke tengah, dan memiliki baris kosong pemisah
+  const cleanRow1 = ['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI', ...Array(36).fill('')];
+  const cleanRow2 = ['TAHUN AJARAN 2025/2026', ...Array(36).fill('')];
+
   await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
     method: 'POST',
     headers: {
@@ -776,19 +779,132 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
       data: [
         {
           range: 'ABSENSI!A1:AK1',
-          values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI']]
+          values: [cleanRow1]
         },
         {
           range: 'ABSENSI!A2:AK2',
-          values: [['TAHUN AJARAN 2025/2026']]
+          values: [cleanRow2]
         }
       ]
     })
   });
 
+  const postRequests = [
+    // Unmerge A1:AK2 dulu agar tidak ada konflik merge
+    {
+      unmergeCells: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 37
+        }
+      }
+    },
+    // Merge A1:AK1
+    {
+      mergeCells: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 37
+        },
+        mergeType: 'MERGE_ALL'
+      }
+    },
+    // Merge A2:AK2
+    {
+      mergeCells: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 37
+        },
+        mergeType: 'MERGE_ALL'
+      }
+    },
+    // Format Judul Baris 1: Bold, Font 11, Center
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 37
+        },
+        cell: {
+          userEnteredFormat: {
+            textFormat: { bold: true, fontSize: 11 },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE'
+          }
+        },
+        fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    },
+    // Format Judul Baris 2: Bold, Font 10, Center
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 37
+        },
+        cell: {
+          userEnteredFormat: {
+            textFormat: { bold: true, fontSize: 10 },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE'
+          }
+        },
+        fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+      }
+    }
+  ];
+
+  // Periksa apakah baris 3 langsung berisi header 'No.' (tidak ada baris kosong pemisah)
+  // Jika ya, sisipkan 1 baris kosong pemisah agar persis seperti tabel bulan lainnya
+  const topHeaderCheckRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values/ABSENSI!A3:B3?valueRenderOption=FORMATTED_VALUE`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (topHeaderCheckRes.ok) {
+    const chk = await topHeaderCheckRes.json();
+    const row3Val = chk.values?.[0]?.join(' ') || '';
+    if (row3Val.toUpperCase().includes('NO') || row3Val.toUpperCase().includes('NAMA')) {
+      postRequests.unshift({
+        insertDimension: {
+          range: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: 2,
+            endIndex: 3
+          },
+          inheritFromBefore: false
+        }
+      });
+    }
+  }
+
+  await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ requests: postRequests })
+  });
+
   return {
     success: true,
-    message: 'Tabel bulan telah rapi berurutan (Januari, Februari, dst).'
+    message: 'Tabel bulan telah rapi berurutan (Januari, Februari, Maret, April, Mei, Juni) dengan judul bersih dan terpusat!'
   };
 }
 
