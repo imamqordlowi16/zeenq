@@ -574,7 +574,8 @@ h1, h2, h3, h4, h5, h6 {
 .mark-dot {
   color: var(--status-hadir);
   background: var(--status-hadir-bg);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
+  font-weight: 900;
   line-height: 1;
 }
 

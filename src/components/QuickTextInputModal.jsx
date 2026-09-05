@@ -110,7 +110,7 @@ export default function QuickTextInputModal({
                 Input Presensi Cepat Lewat Teks
               </h3>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Ketik / tempel daftar siswa yang absen, siswa lainnya otomatis terisi Hadir (•)
+                Ketik / tempel daftar siswa yang absen, siswa lainnya otomatis terisi Hadir (.)
               </p>
             </div>
           </div>
@@ -234,7 +234,7 @@ export default function QuickTextInputModal({
             <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--status-hadir)' }}>
               {countHadir} Siswa
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Hadir (•)</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Hadir (.)</div>
           </div>
 
           <div
@@ -371,7 +371,7 @@ export default function QuickTextInputModal({
                 </div>
 
                 <div>
-                  {s.mark === '.' && <span className="badge badge-hadir">Hadir (•)</span>}
+                  {s.mark === '.' && <span className="badge badge-hadir">Hadir (.)</span>}
                   {s.mark === 'S' && <span className="badge badge-sakit">Sakit (S)</span>}
                   {s.mark === 'I' && <span className="badge badge-izin">Izin (I)</span>}
                   {s.mark === 'A' && <span className="badge badge-alpa">Alpa (A)</span>}

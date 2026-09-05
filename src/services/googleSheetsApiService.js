@@ -57,7 +57,7 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
   students.forEach((student, idx) => {
     const studentRow = [student.no || idx + 1, student.name];
     for (let d = 1; d <= 31; d++) {
-      studentRow.push(d <= totalDays ? '•' : '');
+      studentRow.push(d <= totalDays ? '.' : '');
     }
     studentRow.push(0, 0, 0, 0); // Sakit, Izin, Alpa, Jumlah
     rows.push(studentRow);
@@ -684,7 +684,7 @@ export async function queueAttendanceMarkUpdate(
   // Tentukan kolom tanggal (misal Day 1 = C, Day 2 = D, dst)
   const targetColIdx = colIdx !== undefined ? colIdx : 1 + dayNum;
   const colLetter = getColLetter(targetColIdx);
-  const cellVal = mark === '.' ? '•' : (mark || '');
+  const cellVal = mark || '';
 
   // 1. Tanda absensi harian
   pendingCellUpdates.set(`ABSENSI!${colLetter}${rowIndex}`, cellVal);

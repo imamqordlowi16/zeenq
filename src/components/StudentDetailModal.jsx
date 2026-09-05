@@ -232,7 +232,7 @@ export default function StudentDetailModal({ student, monthName, signatures, onC
                   title={`Tanggal ${day}: ${mark || 'Tidak Ada Data'}`}
                 >
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{day}</div>
-                  <div>{mark === '.' ? '•' : mark || '-'}</div>
+                  <div>{mark || '-'}</div>
                 </div>
               );
             })}

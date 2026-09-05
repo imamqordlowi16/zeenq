@@ -42,7 +42,7 @@ export function exportToExcel(attendanceData, rekapData, mutasiData, filename = 
         const row = [s.no, s.name];
         for (let d = 1; d <= totalDays; d++) {
           const mark = s.days ? s.days[d] || '' : '';
-          row.push(mark === '.' ? '•' : mark);
+          row.push(mark || '');
         }
         row.push(s.sakit || 0);
         row.push(s.izin || 0);

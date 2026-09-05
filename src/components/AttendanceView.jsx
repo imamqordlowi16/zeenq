@@ -324,7 +324,7 @@ export default function AttendanceView({
       >
         <span style={{ fontWeight: 600 }}>Keterangan:</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <span className="mark-cell mark-dot" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>•</span>
+          <span className="mark-cell mark-dot" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px', fontWeight: 800, fontSize: '1rem' }}>.</span>
           Hadir
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -406,9 +406,9 @@ export default function AttendanceView({
                           handleToggleMark(s.no, d, mark);
                         }}
                         style={{ cursor: 'pointer', userSelect: 'none' }}
-                        title={`${s.name} - Tgl ${d}\nStatus: ${mark === '.' ? 'Hadir (•)' : mark === 'S' ? 'Sakit (S)' : mark === 'I' ? 'Izin (I)' : mark === 'A' ? 'Alpa (A)' : 'Belum Ada'}\n(Klik untuk siklus: Hadir -> Sakit -> Izin -> Alpa -> Kosong)`}
+                        title={`${s.name} - Tgl ${d}\nStatus: ${mark === '.' ? 'Hadir (.)' : mark === 'S' ? 'Sakit (S)' : mark === 'I' ? 'Izin (I)' : mark === 'A' ? 'Alpa (A)' : 'Belum Ada'}\n(Klik untuk siklus: Hadir -> Sakit -> Izin -> Alpa -> Kosong)`}
                       >
-                        {mark === '.' ? '•' : mark || '-'}
+                        {mark || '-'}
                       </td>
                     );
                   })}

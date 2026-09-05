@@ -113,7 +113,7 @@ export default function PrintReportModal({ isOpen, onClose, monthData, sheetTitl
                     const mark = s.days[d];
                     return (
                       <td key={d} style={{ border: '1px solid #000', padding: '1px' }}>
-                        {mark === '.' ? '•' : mark || ''}
+                        {mark || ''}
                       </td>
                     );
                   })}
