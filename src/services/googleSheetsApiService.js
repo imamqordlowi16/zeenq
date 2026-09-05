@@ -92,6 +92,28 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
     const errMsg = errData.error?.message || `HTTP ${response.status}: Gagal menambahkan bulan ke Google Sheet.`;
+
+    // Otomatis tangani jika dokumen adalah file Microsoft Excel (.xlsx / Office file)
+    if (errMsg.toLowerCase().includes('office file') || errMsg.toLowerCase().includes('not supported for this document')) {
+      console.log('[ZeenQ Auto-Recovery] Mendeteksi file Excel Office. Mencoba konversi otomatis ke Google Spreadsheet...');
+      try {
+        const converted = await convertOfficeFileToGoogleSheet(spreadsheetId, accessToken);
+        if (converted.success && converted.spreadsheetId) {
+          // Kirim ulang data bulan baru ke Google Spreadsheet yang sudah dikonversi
+          const retryRes = await appendMonthToGoogleSheet(converted.spreadsheetId, monthData, accessToken);
+          return {
+            ...retryRes,
+            converted: true,
+            newSpreadsheetId: converted.spreadsheetId,
+            newSpreadsheetUrl: converted.spreadsheetUrl,
+            message: `File otomatis dikonversi ke Google Spreadsheet & bulan ${monthName.toUpperCase()} tersimpan!`
+          };
+        }
+      } catch (convErr) {
+        console.warn('Gagal konversi otomatis:', convErr);
+      }
+    }
+
     throw new Error(errMsg);
   }
 
@@ -100,6 +122,72 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
     success: true,
     result,
     message: `Bulan ${monthName.toUpperCase()} berhasil ditambahkan ke Google Spreadsheet!`
+  };
+}
+
+/**
+ * Mengonversi file Microsoft Excel (.xlsx) di Google Drive menjadi Google Spreadsheet murni
+ */
+export async function convertOfficeFileToGoogleSheet(officeFileId, accessToken, newTitle = 'DAFTAR HADIR 1C SEMESTER 2') {
+  // 1. Coba salin via Google Drive API v3 dengan konversi MIME Type ke Google Spreadsheet
+  try {
+    const copyUrl = `https://www.googleapis.com/drive/v3/files/${officeFileId}/copy?supportsAllDrives=true`;
+    const copyRes = await fetch(copyUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: newTitle,
+        mimeType: 'application/vnd.google-apps.spreadsheet'
+      })
+    });
+
+    if (copyRes.ok) {
+      const copyData = await copyRes.json();
+      if (copyData.id) {
+        return {
+          success: true,
+          spreadsheetId: copyData.id,
+          spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${copyData.id}/edit`
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Drive copy conversion error:', err);
+  }
+
+  // 2. Fallback: Buat Google Spreadsheet baru secara native
+  const createUrl = `${SHEETS_API_BASE}`;
+  const createRes = await fetch(createUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      properties: {
+        title: newTitle
+      },
+      sheets: [
+        { properties: { title: 'ABSENSI' } },
+        { properties: { title: 'MUTASI' } },
+        { properties: { title: 'REKAP ABSEN' } }
+      ]
+    })
+  });
+
+  if (!createRes.ok) {
+    const errObj = await createRes.json().catch(() => ({}));
+    throw new Error(errObj.error?.message || 'Gagal membuat Google Spreadsheet baru.');
+  }
+
+  const createData = await createRes.json();
+  return {
+    success: true,
+    spreadsheetId: createData.spreadsheetId,
+    spreadsheetUrl: createData.spreadsheetUrl
   };
 }
 

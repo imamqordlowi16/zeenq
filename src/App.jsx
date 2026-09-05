@@ -467,14 +467,23 @@ export default function App() {
         googleToken
       )
         .then((res) => {
+          if (res.converted && res.newSpreadsheetId) {
+            const updatedConfig = {
+              ...sheetConfig,
+              id: res.newSpreadsheetId,
+              url: res.newSpreadsheetUrl || `https://docs.google.com/spreadsheets/d/${res.newSpreadsheetId}/edit`
+            };
+            saveConfig(updatedConfig);
+            setSheetConfig(updatedConfig);
+          }
           setSyncToast({
             type: 'success',
             title: `Bulan ${name.toUpperCase()} Tersimpan di Google Sheets!`,
-            message: res.simulated
-              ? 'Mode Demo Cloud: Tabel bulan baru terverifikasi dan aktif di Google Sheets.'
+            message: res.converted
+              ? 'File Excel otomatis dikonversi menjadi Google Spreadsheet murni & bulan baru tersimpan!'
               : 'Tabel bulan baru otomatis terbit di file Google Sheets Anda di Google Drive.'
           });
-          setTimeout(() => setSyncToast(null), 6000);
+          setTimeout(() => setSyncToast(null), 7000);
         })
         .catch((err) => {
           let errorMsg = err.message || 'Gagal mengirim data ke Google Sheets API.';
