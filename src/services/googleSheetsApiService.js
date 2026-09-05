@@ -696,37 +696,47 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   const data = await res.json();
   const rows = data.values || [];
 
-  let topJanRowIdx = -1;
-  let topJanTitle = 'DAFTAR HADIR PESERTA DIDIK BULAN JANUARI';
-  let topJanYear = 'TAHUN AJARAN 2025/2026';
-  let kehadiranRowIdx = -1;
   const headers = [];
-
   rows.forEach((row, idx) => {
-    const rowStr = row.join(' ').toUpperCase();
-    if (idx < 5 && rowStr.includes('BULAN JANUARI') && topJanRowIdx === -1) {
-      topJanRowIdx = idx;
-      const cellTitle = row.find((c) => String(c).toUpperCase().includes('BULAN JANUARI'));
-      if (cellTitle) topJanTitle = cellTitle;
-      if (rows[idx + 1]) {
-        const cellYear = rows[idx + 1].find((c) => String(c).toUpperCase().includes('TAHUN AJARAN'));
-        if (cellYear) topJanYear = cellYear;
-      }
-    }
-    if (rowStr.includes('KEHADIRAN') && kehadiranRowIdx === -1) {
-      kehadiranRowIdx = idx;
-    }
     if (row.some((c) => String(c).toUpperCase().includes('NAMA SISWA') || String(c).toUpperCase() === 'NAMA')) {
       headers.push(idx);
     }
   });
 
-  // Tulis teks judul Januari di atas tabel kedua (posisi kotak merah tengah) jika ada 2 header tabel
+  // Jika terdapat tabel uji coba lama di atas tabel asli Januari (headers.length >= 2)
   if (headers.length >= 2) {
-    const table2HeaderIdx = headers[1];
-    const janTitleRow = table2HeaderIdx >= 2 ? table2HeaderIdx - 2 : table2HeaderIdx;
-    const janYearRow = table2HeaderIdx >= 1 ? table2HeaderIdx - 1 : table2HeaderIdx;
+    const secondHeaderIdx = headers[1];
+    // Sisakan 2 baris kosong untuk judul resmi Januari
+    const deleteEnd = secondHeaderIdx >= 2 ? secondHeaderIdx - 2 : secondHeaderIdx;
 
+    const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: 0,
+                endIndex: deleteEnd
+              }
+            }
+          }
+        ]
+      })
+    });
+
+    if (!deleteRes.ok) {
+      const err = await deleteRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
+    }
+
+    // Tulis judul resmi Januari di baris 1 & 2
     await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
       headers: {
@@ -737,189 +747,48 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
         valueInputOption: 'USER_ENTERED',
         data: [
           {
-            range: `ABSENSI!A${janTitleRow + 1}:AK${janTitleRow + 1}`,
-            values: [[topJanTitle]]
+            range: 'ABSENSI!A1:AK1',
+            values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI']]
           },
           {
-            range: `ABSENSI!A${janYearRow + 1}:AK${janYearRow + 1}`,
-            values: [[topJanYear]]
+            range: 'ABSENSI!A2:AK2',
+            values: [['TAHUN AJARAN 2025/2026']]
           }
         ]
       })
     });
+
+    return {
+      success: true,
+      message: 'Urutan bulan berhasil dirapikan! Tabel resmi Januari sekarang menjadi nomor 1 paling atas, langsung diikuti Februari.'
+    };
   }
 
-  const requests = [];
-
-  // Format judul Januari di atas tabel kedua (Merge & Center Bold)
-  if (headers.length >= 2) {
-    const table2HeaderIdx = headers[1];
-    const janTitleRow = table2HeaderIdx >= 2 ? table2HeaderIdx - 2 : table2HeaderIdx;
-    const janYearRow = table2HeaderIdx >= 1 ? table2HeaderIdx - 1 : table2HeaderIdx;
-
-    requests.push(
-      {
-        mergeCells: {
-          range: {
-            sheetId,
-            startRowIndex: janTitleRow,
-            endRowIndex: janTitleRow + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          mergeType: 'MERGE_ALL'
+  // Jika hanya 1 tabel (atau sudah rapi), pastikan judulnya adalah JANUARI
+  await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: [
+        {
+          range: 'ABSENSI!A1:AK1',
+          values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI']]
+        },
+        {
+          range: 'ABSENSI!A2:AK2',
+          values: [['TAHUN AJARAN 2025/2026']]
         }
-      },
-      {
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: janTitleRow,
-            endRowIndex: janTitleRow + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          cell: {
-            userEnteredFormat: {
-              textFormat: { bold: true, fontSize: 11 },
-              horizontalAlignment: 'CENTER',
-              verticalAlignment: 'MIDDLE'
-            }
-          },
-          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-        }
-      },
-      {
-        mergeCells: {
-          range: {
-            sheetId,
-            startRowIndex: janYearRow,
-            endRowIndex: janYearRow + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          mergeType: 'MERGE_ALL'
-        }
-      },
-      {
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: janYearRow,
-            endRowIndex: janYearRow + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          cell: {
-            userEnteredFormat: {
-              textFormat: { bold: true, fontSize: 10 },
-              horizontalAlignment: 'CENTER',
-              verticalAlignment: 'MIDDLE'
-            }
-          },
-          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-        }
-      }
-    );
-  }
-
-  // Rapikan kotak orange: baris KEHADIRAN (%) di Tabel 1
-  if (kehadiranRowIdx !== -1) {
-    requests.push(
-      {
-        mergeCells: {
-          range: {
-            sheetId,
-            startRowIndex: kehadiranRowIdx,
-            endRowIndex: kehadiranRowIdx + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 35
-          },
-          mergeType: 'MERGE_ALL'
-        }
-      },
-      {
-        mergeCells: {
-          range: {
-            sheetId,
-            startRowIndex: kehadiranRowIdx,
-            endRowIndex: kehadiranRowIdx + 1,
-            startColumnIndex: 35,
-            endColumnIndex: 37
-          },
-          mergeType: 'MERGE_ALL'
-        }
-      },
-      {
-        updateBorders: {
-          range: {
-            sheetId,
-            startRowIndex: kehadiranRowIdx,
-            endRowIndex: kehadiranRowIdx + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
-        }
-      },
-      {
-        repeatCell: {
-          range: {
-            sheetId,
-            startRowIndex: kehadiranRowIdx,
-            endRowIndex: kehadiranRowIdx + 1,
-            startColumnIndex: 0,
-            endColumnIndex: 37
-          },
-          cell: {
-            userEnteredFormat: {
-              textFormat: { bold: true, fontSize: 9 },
-              horizontalAlignment: 'CENTER',
-              verticalAlignment: 'MIDDLE'
-            }
-          },
-          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-        }
-      }
-    );
-  }
-
-  // Hapus 2 baris teratas jika berisi judul Januari yang menumpuk di atas judul Juli
-  if (topJanRowIdx === 0) {
-    requests.push({
-      deleteDimension: {
-        range: {
-          sheetId,
-          dimension: 'ROWS',
-          startIndex: 0,
-          endIndex: 2
-        }
-      }
-    });
-  }
-
-  if (requests.length > 0) {
-    const batchRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ requests })
-    });
-    if (!batchRes.ok) {
-      const err = await batchRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
-    }
-  }
+      ]
+    })
+  });
 
   return {
     success: true,
-    message: 'Judul Januari berhasil dipindahkan ke atas tabel kedua, tabel Juli di baris 1-2, dan baris KEHADIRAN (%) telah dirapikan!'
+    message: 'Tabel bulan telah rapi berurutan (Januari, Februari, dst).'
   };
 }
 
