@@ -712,8 +712,8 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   // HANYA hapus baris teratas jika BENAR-BENAR ada tabel nyasar 'BULAN JULI' di paling atas
   if (hasStrayJuliAtTop && headers.length >= 2) {
     const secondHeaderIdx = headers[1];
-    const deleteEnd = secondHeaderIdx >= 2 ? secondHeaderIdx - 2 : secondHeaderIdx;
 
+    // 1. Hapus seluruh baris tabel nyasar Juli sampai tepat sebelum header tabel Januari asli
     const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
       method: 'POST',
       headers: {
@@ -728,8 +728,86 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
                 sheetId,
                 dimension: 'ROWS',
                 startIndex: 0,
-                endIndex: deleteEnd
+                endIndex: secondHeaderIdx
               }
+            }
+          },
+          // 2. Sisipkan 3 baris bersih di paling atas untuk judul
+          {
+            insertDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: 0,
+                endIndex: 3
+              },
+              inheritFromBefore: false
+            }
+          },
+          // 3. Merge baris 1 (A1:AK1)
+          {
+            mergeCells: {
+              range: {
+                sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: 37
+              },
+              mergeType: 'MERGE_ALL'
+            }
+          },
+          // 4. Merge baris 2 (A2:AK2)
+          {
+            mergeCells: {
+              range: {
+                sheetId,
+                startRowIndex: 1,
+                endRowIndex: 2,
+                startColumnIndex: 0,
+                endColumnIndex: 37
+              },
+              mergeType: 'MERGE_ALL'
+            }
+          },
+          // 5. Format Judul Baris 1: Bold, Font 11, Center
+          {
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: 37
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: { bold: true, fontSize: 11 },
+                  horizontalAlignment: 'CENTER',
+                  verticalAlignment: 'MIDDLE'
+                }
+              },
+              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+            }
+          },
+          // 6. Format Judul Baris 2: Bold, Font 10, Center
+          {
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex: 1,
+                endRowIndex: 2,
+                startColumnIndex: 0,
+                endColumnIndex: 37
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: { bold: true, fontSize: 10 },
+                  horizontalAlignment: 'CENTER',
+                  verticalAlignment: 'MIDDLE'
+                }
+              },
+              fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
             }
           }
         ]
@@ -741,7 +819,7 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
       throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
     }
 
-    // Tulis judul resmi Januari di baris 1 & 2
+    // Tulis teks judul resmi Januari di baris 1 dan 2
     await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
       headers: {
@@ -753,11 +831,11 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
         data: [
           {
             range: 'ABSENSI!A1:AK1',
-            values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI']]
+            values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI', ...Array(36).fill('')]]
           },
           {
             range: 'ABSENSI!A2:AK2',
-            values: [['TAHUN AJARAN 2025/2026']]
+            values: [['TAHUN AJARAN 2025/2026', ...Array(36).fill('')]]
           }
         ]
       })
@@ -765,7 +843,7 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
 
     return {
       success: true,
-      message: 'Urutan bulan berhasil dirapikan! Tabel resmi Januari sekarang menjadi nomor 1 paling atas, langsung diikuti Februari.'
+      message: 'Urutan bulan berhasil dirapikan! Tabel resmi Januari sekarang menjadi nomor 1 paling atas, langsung diikuti Februari, Maret, April, Mei, dan Juni.'
     };
   }
 
