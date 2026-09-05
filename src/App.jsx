@@ -507,8 +507,34 @@ export default function App() {
     };
 
     setAttendanceData((prev) => {
-      const updatedMonths = [...prev.months, newMonth];
-      const updated = { ...prev, months: updatedMonths };
+      const isSem2 = prev.isSemester2 !== false;
+      const order = isSem2
+        ? ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
+        : ['JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER', 'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'];
+
+      // Filter out stray empty Juli if this is a Semester 2 spreadsheet
+      let filtered = [...prev.months, newMonth];
+      if (isSem2) {
+        filtered = filtered.filter((m) => {
+          if (m.name.toUpperCase() === 'JULI') {
+            const hasActivity = m.students?.some((s) => (s.hadir || 0) + (s.sakit || 0) + (s.izin || 0) + (s.alpa || 0) > 0);
+            return hasActivity;
+          }
+          return true;
+        });
+      }
+
+      // Sort strictly according to calendar sequence
+      filtered.sort((a, b) => {
+        const idxA = order.indexOf(a.name.toUpperCase());
+        const idxB = order.indexOf(b.name.toUpperCase());
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return (a.monthOrder || 0) - (b.monthOrder || 0);
+      });
+
+      const updated = { ...prev, months: filtered };
       persistAttendance(updated);
       return updated;
     });

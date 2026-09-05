@@ -110,7 +110,90 @@ export async function appendMonthToGoogleSheet(spreadsheetId, monthData, accessT
   sigRow4[28] = 'NIP. 199610182022212009';
   rows.push(sigRow4);
 
-  rows.push([]);
+  // Otomatis bersihkan tabel nyasar di baris paling atas agar urutan bulan selalu berurutan sesuai semester
+  try {
+    const metaCheckRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (metaCheckRes.ok) {
+      const metaCheckData = await metaCheckRes.json();
+      const absSheet = metaCheckData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaCheckData.sheets?.[0];
+      const targetSheetId = absSheet?.properties?.sheetId ?? 272037099;
+
+      const topChkRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values/ABSENSI!A1:AK100?valueRenderOption=FORMATTED_VALUE`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (topChkRes.ok) {
+        const topChkData = await topChkRes.json();
+        const topRows = topChkData.values || [];
+
+        let juliRowIdx = -1;
+        const headerIndices = [];
+
+        topRows.forEach((r, idx) => {
+          const str = r.join(' ').toUpperCase();
+          if (idx < 5 && str.includes('BULAN JULI') && juliRowIdx === -1) {
+            juliRowIdx = idx;
+          }
+          if (r.some((c) => String(c).toUpperCase().includes('NAMA SISWA') || String(c).toUpperCase() === 'NAMA')) {
+            headerIndices.push(idx);
+          }
+        });
+
+        // Jika ada tabel Juli kosong di atas dan ada tabel kedua di bawahnya, hapus blok Juli tersebut
+        if (juliRowIdx !== -1 && headerIndices.length >= 2) {
+          const secondHeader = headerIndices[1];
+          const deleteEnd = secondHeader >= 2 ? secondHeader - 2 : secondHeader;
+
+          await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              requests: [
+                {
+                  deleteDimension: {
+                    range: {
+                      sheetId: targetSheetId,
+                      dimension: 'ROWS',
+                      startIndex: 0,
+                      endIndex: deleteEnd
+                    }
+                  }
+                }
+              ]
+            })
+          });
+
+          // Pastikan judul Januari berada rapi di baris 1 paling atas
+          await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              valueInputOption: 'USER_ENTERED',
+              data: [
+                {
+                  range: 'ABSENSI!A1:AK1',
+                  values: [['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI']]
+                },
+                {
+                  range: 'ABSENSI!A2:AK2',
+                  values: [[`TAHUN AJARAN ${cleanYear}`]]
+                }
+              ]
+            })
+          });
+        }
+      }
+    }
+  } catch (cleanErr) {
+    console.warn('[Auto-Order Pre-Check] Catatan:', cleanErr);
+  }
 
   // Kirim nilai data ke Google Sheets API via append endpoint
   const url = `${SHEETS_API_BASE}/${spreadsheetId}/values/${encodeURIComponent(sheetTitle)}!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
