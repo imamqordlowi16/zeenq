@@ -606,132 +606,45 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
   const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
 
-  // 2. Baca isi baris A1:AK80
-  const url = `${SHEETS_API_BASE}/${spreadsheetId}/values/ABSENSI!A1:AK80?valueRenderOption=FORMATTED_VALUE`;
+  // 2. Baca isi baris A1:AK100
+  const url = `${SHEETS_API_BASE}/${spreadsheetId}/values/ABSENSI!A1:AK100?valueRenderOption=FORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) throw new Error('Gagal membaca data spreadsheet');
   const data = await res.json();
   const rows = data.values || [];
 
-  let juliTitleRowIdx = -1;
+  let topJanRowIdx = -1;
+  let topJanTitle = 'DAFTAR HADIR PESERTA DIDIK BULAN JANUARI';
+  let topJanYear = 'TAHUN AJARAN 2025/2026';
+  let kehadiranRowIdx = -1;
   const headers = [];
 
   rows.forEach((row, idx) => {
     const rowStr = row.join(' ').toUpperCase();
-    if (rowStr.includes('BULAN JULI') || (rowStr.includes('JULI') && rowStr.includes('DAFTAR HADIR'))) {
-      if (juliTitleRowIdx === -1) juliTitleRowIdx = idx;
+    if (idx < 5 && rowStr.includes('BULAN JANUARI') && topJanRowIdx === -1) {
+      topJanRowIdx = idx;
+      const cellTitle = row.find((c) => String(c).toUpperCase().includes('BULAN JANUARI'));
+      if (cellTitle) topJanTitle = cellTitle;
+      if (rows[idx + 1]) {
+        const cellYear = rows[idx + 1].find((c) => String(c).toUpperCase().includes('TAHUN AJARAN'));
+        if (cellYear) topJanYear = cellYear;
+      }
+    }
+    if (rowStr.includes('KEHADIRAN') && kehadiranRowIdx === -1) {
+      kehadiranRowIdx = idx;
     }
     if (row.some((c) => String(c).toUpperCase().includes('NAMA SISWA') || String(c).toUpperCase() === 'NAMA')) {
       headers.push(idx);
     }
   });
 
-  // KASUS A: Ada tabel uji coba JULI di atas tabel asli JANUARI (headers.length >= 2)
-  if (juliTitleRowIdx !== -1 && headers.length >= 2) {
-    const startIndex = juliTitleRowIdx; // e.g. index 2 (row 3)
-    const secondHeaderIdx = headers[1];  // e.g. index 47 (row 48)
-    // Sisakan 1 baris kosong pemisah sebelum header tabel kedua
-    const endIndex = secondHeaderIdx > startIndex + 2 ? secondHeaderIdx - 1 : secondHeaderIdx;
+  // Tulis teks judul Januari di atas tabel kedua (posisi kotak merah tengah) jika ada 2 header tabel
+  if (headers.length >= 2) {
+    const table2HeaderIdx = headers[1];
+    const janTitleRow = table2HeaderIdx >= 2 ? table2HeaderIdx - 2 : table2HeaderIdx;
+    const janYearRow = table2HeaderIdx >= 1 ? table2HeaderIdx - 1 : table2HeaderIdx;
 
-    const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            deleteDimension: {
-              range: {
-                sheetId,
-                dimension: 'ROWS',
-                startIndex,
-                endIndex
-              }
-            }
-          }
-        ]
-      })
-    });
-
-    if (!deleteRes.ok) {
-      const err = await deleteRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
-    }
-
-    return {
-      success: true,
-      message: 'Tabel bulan Juli berhasil dibersihkan! Judul dan tabel asli Januari kini menyatu di baris pertama paling atas.'
-    };
-  }
-
-  // KASUS B: Ada baris uji coba lama di atas (headers[0] >= 35)
-  if (headers.length >= 1 && headers[0] >= 35) {
-    const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            deleteDimension: {
-              range: {
-                sheetId,
-                dimension: 'ROWS',
-                startIndex: 0,
-                endIndex: headers[0] - 2
-              }
-            }
-          }
-        ]
-      })
-    });
-    if (deleteRes.ok) {
-      return {
-        success: true,
-        message: 'Baris uji coba di atas berhasil dibersihkan! Tabel Januari sekarang berada di baris pertama.'
-      };
-    }
-  }
-
-  // KASUS B: Ubah teks BULAN JULI menjadi BULAN JANUARI pada sel yang ada
-  const updateData = [];
-  rows.forEach((row, rIdx) => {
-    row.forEach((cell, cIdx) => {
-      if (typeof cell === 'string') {
-        let modified = false;
-        let newCell = cell;
-
-        if (newCell.toUpperCase().includes('BULAN JULI')) {
-          newCell = newCell.replace(/BULAN\s+JULI/gi, 'BULAN JANUARI');
-          modified = true;
-        }
-        if (newCell.includes('JULI 2024') || newCell.includes('Juli 2024')) {
-          newCell = newCell.replace(/JULI\s+2024/gi, 'Januari 2025');
-          modified = true;
-        }
-
-        if (modified) {
-          let colStr = '';
-          let tempC = cIdx;
-          while (tempC >= 0) {
-            colStr = String.fromCharCode(65 + (tempC % 26)) + colStr;
-            tempC = Math.floor(tempC / 26) - 1;
-          }
-          updateData.push({
-            range: `ABSENSI!${colStr}${rIdx + 1}`,
-            values: [[newCell]]
-          });
-        }
-      }
-    });
-  });
-
-  if (updateData.length > 0) {
-    const updateRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
+    await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -739,17 +652,192 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
       },
       body: JSON.stringify({
         valueInputOption: 'USER_ENTERED',
-        data: updateData
+        data: [
+          {
+            range: `ABSENSI!A${janTitleRow + 1}:AK${janTitleRow + 1}`,
+            values: [[topJanTitle]]
+          },
+          {
+            range: `ABSENSI!A${janYearRow + 1}:AK${janYearRow + 1}`,
+            values: [[topJanYear]]
+          }
+        ]
       })
     });
-    if (!updateRes.ok) {
-      const err = await updateRes.json().catch(() => ({}));
-      throw new Error(err.error?.message || 'Gagal memperbarui judul di sheet');
+  }
+
+  const requests = [];
+
+  // Format judul Januari di atas tabel kedua (Merge & Center Bold)
+  if (headers.length >= 2) {
+    const table2HeaderIdx = headers[1];
+    const janTitleRow = table2HeaderIdx >= 2 ? table2HeaderIdx - 2 : table2HeaderIdx;
+    const janYearRow = table2HeaderIdx >= 1 ? table2HeaderIdx - 1 : table2HeaderIdx;
+
+    requests.push(
+      {
+        mergeCells: {
+          range: {
+            sheetId,
+            startRowIndex: janTitleRow,
+            endRowIndex: janTitleRow + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          mergeType: 'MERGE_ALL'
+        }
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: janTitleRow,
+            endRowIndex: janTitleRow + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { bold: true, fontSize: 11 },
+              horizontalAlignment: 'CENTER',
+              verticalAlignment: 'MIDDLE'
+            }
+          },
+          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+        }
+      },
+      {
+        mergeCells: {
+          range: {
+            sheetId,
+            startRowIndex: janYearRow,
+            endRowIndex: janYearRow + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          mergeType: 'MERGE_ALL'
+        }
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: janYearRow,
+            endRowIndex: janYearRow + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { bold: true, fontSize: 10 },
+              horizontalAlignment: 'CENTER',
+              verticalAlignment: 'MIDDLE'
+            }
+          },
+          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+        }
+      }
+    );
+  }
+
+  // Rapikan kotak orange: baris KEHADIRAN (%) di Tabel 1
+  if (kehadiranRowIdx !== -1) {
+    requests.push(
+      {
+        mergeCells: {
+          range: {
+            sheetId,
+            startRowIndex: kehadiranRowIdx,
+            endRowIndex: kehadiranRowIdx + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 35
+          },
+          mergeType: 'MERGE_ALL'
+        }
+      },
+      {
+        mergeCells: {
+          range: {
+            sheetId,
+            startRowIndex: kehadiranRowIdx,
+            endRowIndex: kehadiranRowIdx + 1,
+            startColumnIndex: 35,
+            endColumnIndex: 37
+          },
+          mergeType: 'MERGE_ALL'
+        }
+      },
+      {
+        updateBorders: {
+          range: {
+            sheetId,
+            startRowIndex: kehadiranRowIdx,
+            endRowIndex: kehadiranRowIdx + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+          bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+          left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+          right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+          innerVertical: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
+        }
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: kehadiranRowIdx,
+            endRowIndex: kehadiranRowIdx + 1,
+            startColumnIndex: 0,
+            endColumnIndex: 37
+          },
+          cell: {
+            userEnteredFormat: {
+              textFormat: { bold: true, fontSize: 9 },
+              horizontalAlignment: 'CENTER',
+              verticalAlignment: 'MIDDLE'
+            }
+          },
+          fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
+        }
+      }
+    );
+  }
+
+  // Hapus 2 baris teratas jika berisi judul Januari yang menumpuk di atas judul Juli
+  if (topJanRowIdx === 0) {
+    requests.push({
+      deleteDimension: {
+        range: {
+          sheetId,
+          dimension: 'ROWS',
+          startIndex: 0,
+          endIndex: 2
+        }
+      }
+    });
+  }
+
+  if (requests.length > 0) {
+    const batchRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ requests })
+    });
+    if (!batchRes.ok) {
+      const err = await batchRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Gagal merapikan baris tabel.');
     }
   }
 
-  return { success: true, message: 'Judul dan urutan bulan berhasil disesuaikan ke Januari (Semester 2)!' };
+  return {
+    success: true,
+    message: 'Judul Januari berhasil dipindahkan ke atas tabel kedua, tabel Juli di baris 1-2, dan baris KEHADIRAN (%) telah dirapikan!'
+  };
 }
 
 export const fixSpreadsheetMonthTitleAndOrder = fixSemester2Spreadsheet;
-
