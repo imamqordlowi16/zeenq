@@ -479,44 +479,10 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
 }
 
 /**
- * Menghapus baris 1 s/d 40 di sheet ABSENSI (membersihkan tabel percobaan lama yang rusak)
+ * Menghapus baris uji coba lama di sheet ABSENSI (membersihkan tabel percobaan yang rusak)
  */
 export async function deleteCorruptedUpperRows(spreadsheetId, accessToken) {
-  const metaRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!metaRes.ok) throw new Error('Gagal mengakses metadata spreadsheet');
-  const metaData = await metaRes.json();
-  const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
-  const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
-
-  const res = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: 'ROWS',
-              startIndex: 0,
-              endIndex: 40
-            }
-          }
-        }
-      ]
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'Gagal membersihkan baris lama.');
-  }
-  return { success: true, message: 'Baris 1-40 yang rusak berhasil dibersihkan dari Google Sheets!' };
+  return fixSemester2Spreadsheet(spreadsheetId, accessToken);
 }
 
 /**
@@ -647,15 +613,26 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   const data = await res.json();
   const rows = data.values || [];
 
-  // Analisis tabel atas (baris 0 s/d 39) dan tabel bawah (baris 40+)
-  const top40Text = rows.slice(0, 40).map((r) => r.join(' ')).join(' ').toUpperCase();
-  const bot40Text = rows.slice(40, 80).map((r) => r.join(' ')).join(' ').toUpperCase();
+  let juliTitleRowIdx = -1;
+  const headers = [];
 
-  const topHasJuli = top40Text.includes('JULI');
-  const botHasJanuari = bot40Text.includes('JANUARI') || bot40Text.includes('NAMA SISWA');
+  rows.forEach((row, idx) => {
+    const rowStr = row.join(' ').toUpperCase();
+    if (rowStr.includes('BULAN JULI') || (rowStr.includes('JULI') && rowStr.includes('DAFTAR HADIR'))) {
+      if (juliTitleRowIdx === -1) juliTitleRowIdx = idx;
+    }
+    if (row.some((c) => String(c).toUpperCase().includes('NAMA SISWA') || String(c).toUpperCase() === 'NAMA')) {
+      headers.push(idx);
+    }
+  });
 
-  // KASUS A: Ada tabel uji coba JULI di atas dan tabel asli JANUARI di bawah
-  if (topHasJuli && botHasJanuari) {
+  // KASUS A: Ada tabel uji coba JULI di atas tabel asli JANUARI (headers.length >= 2)
+  if (juliTitleRowIdx !== -1 && headers.length >= 2) {
+    const startIndex = juliTitleRowIdx; // e.g. index 2 (row 3)
+    const secondHeaderIdx = headers[1];  // e.g. index 47 (row 48)
+    // Sisakan 1 baris kosong pemisah sebelum header tabel kedua
+    const endIndex = secondHeaderIdx > startIndex + 2 ? secondHeaderIdx - 1 : secondHeaderIdx;
+
     const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
       method: 'POST',
       headers: {
@@ -669,8 +646,8 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
               range: {
                 sheetId,
                 dimension: 'ROWS',
-                startIndex: 0,
-                endIndex: 40
+                startIndex,
+                endIndex
               }
             }
           }
@@ -685,8 +662,39 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
 
     return {
       success: true,
-      message: 'Tabel bulan Juli berhasil dibersihkan! Tabel asli Januari kini berada di urutan pertama paling atas.'
+      message: 'Tabel bulan Juli berhasil dibersihkan! Judul dan tabel asli Januari kini menyatu di baris pertama paling atas.'
     };
+  }
+
+  // KASUS B: Ada baris uji coba lama di atas (headers[0] >= 35)
+  if (headers.length >= 1 && headers[0] >= 35) {
+    const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: 0,
+                endIndex: headers[0] - 2
+              }
+            }
+          }
+        ]
+      })
+    });
+    if (deleteRes.ok) {
+      return {
+        success: true,
+        message: 'Baris uji coba di atas berhasil dibersihkan! Tabel Januari sekarang berada di baris pertama.'
+      };
+    }
   }
 
   // KASUS B: Ubah teks BULAN JULI menjadi BULAN JANUARI pada sel yang ada
