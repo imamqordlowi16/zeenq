@@ -674,7 +674,7 @@ export function onSheetSyncStatusChange(cb) {
  */
 export async function queueAttendanceMarkUpdate(
   spreadsheetId,
-  { rowIndex, colIdx, dayNum, mark, studentStats },
+  { rowIndex, colIdx, dayNum, mark, studentStats, isJan },
   accessToken
 ) {
   if (!spreadsheetId || !accessToken || accessToken.startsWith('demo-google-token')) {
@@ -699,6 +699,14 @@ export async function queueAttendanceMarkUpdate(
     pendingCellUpdates.set(`ABSENSI!AI${rowIndex}`, i);
     pendingCellUpdates.set(`ABSENSI!AJ${rowIndex}`, a);
     pendingCellUpdates.set(`ABSENSI!AK${rowIndex}`, tot);
+  }
+
+  // 3. Pastikan subheader AH3:AK3 di bulan Januari selalu teks header (bukan angka rekap)
+  if (isJan || rowIndex <= 32) {
+    pendingCellUpdates.set('ABSENSI!AH3', 'Sakit');
+    pendingCellUpdates.set('ABSENSI!AI3', 'Izin');
+    pendingCellUpdates.set('ABSENSI!AJ3', 'Alpa');
+    pendingCellUpdates.set('ABSENSI!AK3', 'Jumlah');
   }
 
   if (syncStatusCallback) syncStatusCallback('saving');
@@ -927,9 +935,8 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
     };
   }
 
-  // Pastikan baris 1 dan baris 2 bersih dari teks lama (seperti NIP nyasar), di-merge ke tengah, dan memiliki baris kosong pemisah
-  const cleanRow1 = ['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI', ...Array(36).fill('')];
-  const cleanRow2 = ['TAHUN AJARAN 2025/2026', ...Array(36).fill('')];
+  // Pastikan baris 1 bersih sebagai judul resmi dan baris 3 subheader AH3:AK3 bersih
+  const cleanRow1 = ['DAFTAR HADIR PESERTA DIDIK BULAN JANUARI TAHUN AJARAN 2025/2026', ...Array(36).fill('')];
 
   await fetch(`${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`, {
     method: 'POST',
@@ -945,10 +952,6 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
           values: [cleanRow1]
         },
         {
-          range: 'ABSENSI!A2:AK2',
-          values: [cleanRow2]
-        },
-        {
           range: 'ABSENSI!AH3:AK3',
           values: [['Sakit', 'Izin', 'Alpa', 'Jumlah']]
         }
@@ -957,38 +960,25 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   });
 
   const postRequests = [
-    // Unmerge A1:AK2 dulu agar tidak ada konflik merge
+    // Unmerge A1:AK1 dulu agar tidak ada konflik merge
     {
       unmergeCells: {
-        range: {
-          sheetId,
-          startRowIndex: 0,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 37
-        }
-      }
-    },
-    // Merge A1:AK1
-    {
-      mergeCells: {
         range: {
           sheetId,
           startRowIndex: 0,
           endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: 37
-        },
-        mergeType: 'MERGE_ALL'
+        }
       }
     },
-    // Merge A2:AK2
+    // Merge A1:AK1 untuk judul
     {
       mergeCells: {
         range: {
           sheetId,
-          startRowIndex: 1,
-          endRowIndex: 2,
+          startRowIndex: 0,
+          endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: 37
         },
@@ -1008,26 +998,6 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
         cell: {
           userEnteredFormat: {
             textFormat: { bold: true, fontSize: 11 },
-            horizontalAlignment: 'CENTER',
-            verticalAlignment: 'MIDDLE'
-          }
-        },
-        fields: 'userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)'
-      }
-    },
-    // Format Judul Baris 2: Bold, Font 10, Center
-    {
-      repeatCell: {
-        range: {
-          sheetId,
-          startRowIndex: 1,
-          endRowIndex: 2,
-          startColumnIndex: 0,
-          endColumnIndex: 37
-        },
-        cell: {
-          userEnteredFormat: {
-            textFormat: { bold: true, fontSize: 10 },
             horizontalAlignment: 'CENTER',
             verticalAlignment: 'MIDDLE'
           }

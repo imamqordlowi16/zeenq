@@ -34,9 +34,7 @@ export function parseCSV(text) {
         i++; // handle CRLF
       }
       currentRow.push(currentVal.trim());
-      if (currentRow.some((col) => col !== '')) {
-        rows.push(currentRow);
-      }
+      rows.push(currentRow);
       currentRow = [];
       currentVal = '';
     } else {
@@ -46,9 +44,12 @@ export function parseCSV(text) {
 
   if (currentVal || currentRow.length > 0) {
     currentRow.push(currentVal.trim());
-    if (currentRow.some((col) => col !== '')) {
-      rows.push(currentRow);
-    }
+    rows.push(currentRow);
+  }
+
+  // Only strip trailing empty rows at the end of the file
+  while (rows.length > 0 && rows[rows.length - 1].every((c) => c === '')) {
+    rows.pop();
   }
 
   return rows;
@@ -74,8 +75,8 @@ export function normalizeAttendanceMark(val) {
 /**
  * Parses the ABSENSI sheet containing monthly tables
  */
-export function parseAttendanceSheet(csvText, docTitle = '') {
-  const rawRows = parseCSV(csvText);
+export function parseAttendanceSheet(csvTextOrRows, docTitle = '') {
+  const rawRows = Array.isArray(csvTextOrRows) ? csvTextOrRows : parseCSV(csvTextOrRows);
   if (!rawRows || rawRows.length === 0) {
     return { months: [], allStudents: [], rawRows: [] };
   }
@@ -387,6 +388,7 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
       dayNumbers,
       dayColMap,
       headerRowIndex: headerIdx + 1,
+      firstStudentRowIndex: students[0]?.rowIndex || (headerIdx + (monthLabel === 'JANUARI' ? 2 : 1)),
       dailySummary,
       stats: {
         totalHadir,

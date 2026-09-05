@@ -42,6 +42,29 @@ import {
   X
 } from 'lucide-react';
 
+/**
+ * Calculates exact 1-indexed Google Sheet row for a student in a month,
+ * with strict protection so Januari Student 1 is always Row 4 (never Row 3 subheader).
+ */
+function computeStudentRowIndex(curMonth, studentNo, curStudent) {
+  const isJan = curMonth?.id === 'januari' || curMonth?.name?.toUpperCase() === 'JANUARI';
+
+  if (curStudent?.rowIndex) {
+    if (isJan && curStudent.rowIndex < 4) {
+      return 4 + (studentNo - 1);
+    }
+    return curStudent.rowIndex;
+  }
+
+  const firstRow =
+    curMonth?.firstStudentRowIndex ||
+    curMonth?.students?.[0]?.rowIndex ||
+    (isJan ? 4 : ((curMonth?.headerRowIndex || 39) + 1));
+
+  const validFirstRow = isJan && firstRow < 4 ? 4 : firstRow;
+  return validFirstRow + (studentNo - 1);
+}
+
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [sheetConfig, setSheetConfig] = useState(() => {
@@ -187,7 +210,7 @@ export default function App() {
 
       // 2. Fetch baseline data from spreadsheet link
       try {
-        let csvText = '';
+        let parsedAttendance = null;
         let fromCache = false;
 
         // Jika login Google aktif, coba ambil data live resmi via Google Sheets API
@@ -195,23 +218,20 @@ export default function App() {
           try {
             const liveRows = await fetchLiveSheetValues(config.id, 'ABSENSI', googleToken);
             if (liveRows && liveRows.length > 5) {
-              csvText = liveRows
-                .map((row) => row.map((c) => `"${String(c || '').replace(/"/g, '""')}"`).join(','))
-                .join('\n');
+              parsedAttendance = parseAttendanceSheet(liveRows, config.title || '');
             }
           } catch (liveErr) {
             console.warn('Live Google Sheets API fetch warning, fallback to CSV:', liveErr);
           }
         }
 
-        if (!csvText) {
+        if (!parsedAttendance || !parsedAttendance.months || parsedAttendance.months.length === 0) {
           const mainRes = await fetchSheetCSV(config.id, config.gid || '0');
-          csvText = mainRes.csvText;
           fromCache = mainRes.fromCache;
+          parsedAttendance = parseAttendanceSheet(mainRes.csvText, config.title || '');
         }
 
         setIsFromCache(fromCache);
-        const parsedAttendance = parseAttendanceSheet(csvText, config.title || '');
 
         // Pertahankan bulan yang baru ditambahkan jika belum masuk ke file online
         setAttendanceData((prev) => {
@@ -475,8 +495,7 @@ export default function App() {
     // 1. Live Sync Langsung ke Google Sheets via REST API (jika login Google aktif)
     if (googleToken) {
       const isJan = curMonth.id === 'januari' || curMonth.name?.toUpperCase() === 'JANUARI';
-      const fallbackRow = (curMonth.headerRowIndex || (isJan ? 2 : 39)) + (isJan ? 2 : 1) + (studentNo - 1);
-      const rowIndex = curStudent.rowIndex || fallbackRow;
+      const rowIndex = computeStudentRowIndex(curMonth, studentNo, curStudent);
       const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
 
       if (rowIndex) {
@@ -487,7 +506,8 @@ export default function App() {
             colIdx,
             dayNum,
             mark: newMark,
-            studentStats
+            studentStats,
+            isJan
           },
           googleToken
         );
@@ -591,8 +611,7 @@ export default function App() {
         if (!student) return;
 
         const isJan = curMonth.id === 'januari' || curMonth.name?.toUpperCase() === 'JANUARI';
-        const fallbackRow = (curMonth.headerRowIndex || (isJan ? 2 : 39)) + (isJan ? 2 : 1) + (student.no - 1);
-        const rowIndex = student.rowIndex || fallbackRow;
+        const rowIndex = computeStudentRowIndex(curMonth, student.no, student);
         const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
 
         const updatedDays = { ...student.days, [dayNum]: u.mark };
@@ -613,7 +632,8 @@ export default function App() {
             colIdx,
             dayNum,
             mark: u.mark,
-            studentStats: { sakit: sk, izin: iz, alpa: al }
+            studentStats: { sakit: sk, izin: iz, alpa: al },
+            isJan
           },
           googleToken
         );
