@@ -81,16 +81,20 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
   }
 
   // 1. Detect semester from document title and first rows
-  const headerContext = (docTitle + ' ' + rawRows.slice(0, 10).map((r) => r.join(' ')).join(' ')).toUpperCase();
+  const headerContext = (docTitle + ' ' + rawRows.slice(0, 15).map((r) => r.join(' ')).join(' ')).toUpperCase();
   const isSemester2 =
+    docTitle.toUpperCase().includes('SEMESTER 2') ||
+    docTitle.toUpperCase().includes('GENAP') ||
     headerContext.includes('SEMESTER 2') ||
     headerContext.includes('SEMESTER II') ||
     headerContext.includes('SMT 2') ||
     headerContext.includes('SMT II') ||
-    headerContext.includes('GENAP');
+    headerContext.includes('GENAP') ||
+    headerContext.includes('JANUARI') ||
+    headerContext.includes('FEBRUARI');
 
-  const semester1Seq = ['JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
-  const semester2Seq = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'];
+  const semester1Seq = ['JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER', 'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI'];
+  const semester2Seq = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
   const defaultSeq = isSemester2 ? semester2Seq : semester1Seq;
   const monthNames = [
     'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
@@ -168,7 +172,8 @@ export function parseAttendanceSheet(csvText, docTitle = '') {
         lineStr.includes('NIP.') ||
         lineStr.includes('Kepala Sekolah') ||
         lineStr.includes('Guru Kelas') ||
-        lineStr.includes('Mengetahui');
+        lineStr.includes('Mengetahui') ||
+        lineStr.includes('Jakarta');
 
       if (!isPreviousSignature) {
         const bulanMatch =

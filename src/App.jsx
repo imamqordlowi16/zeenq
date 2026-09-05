@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import AttendanceView from './components/AttendanceView';
@@ -88,6 +88,45 @@ export default function App() {
   }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode((prev) => !prev);
+
+  const lastReminderRef = useRef(0);
+  const notifyGoogleConnectionNeeded = (monthName) => {
+    const now = Date.now();
+    if (now - lastReminderRef.current < 8000) return;
+    lastReminderRef.current = now;
+    setSyncToast({
+      type: 'warning',
+      title: 'Tersimpan Lokal di ZeenQ',
+      message: `Presensi bulan ${monthName} tersimpan di aplikasi. Untuk menyinkronkan langsung ke file Google Spreadsheet Anda, silakan hubungkan akun Google via tombol [Hubungkan Google] di pojok kanan atas.`
+    });
+    setTimeout(() => setSyncToast(null), 6000);
+  };
+
+  useEffect(() => {
+    onSheetSyncStatusChange((status, error) => {
+      if (status === 'saving') {
+        setSyncToast({
+          type: 'loading',
+          title: 'Menyimpan ke Google Sheets...',
+          message: 'Mengirim update presensi ke file Google Spreadsheet Anda...'
+        });
+      } else if (status === 'saved') {
+        setSyncToast({
+          type: 'success',
+          title: 'Tersimpan di Google Sheets!',
+          message: 'Tanda presensi & total rekapitulasi berhasil diperbarui di spreadsheet.'
+        });
+        setTimeout(() => setSyncToast(null), 3500);
+      } else if (status === 'error') {
+        setSyncToast({
+          type: 'error',
+          title: 'Gagal Menyimpan ke Google Sheets',
+          message: error || 'Periksa koneksi internet atau login Google Anda.'
+        });
+        setTimeout(() => setSyncToast(null), 6000);
+      }
+    });
+  }, []);
 
   // Helper to persist master data to local storage and silent background file
   const persistAttendance = (updatedAttendance, rekap = rekapData, mutasi = mutasiData) => {
@@ -352,38 +391,40 @@ export default function App() {
 
   // Real-time Attendance Mark Updater (Tersimpan Instan & Otomatis Sinkron ke Google Sheets)
   const handleUpdateAttendance = (monthId, studentNo, dayNum, newMark) => {
-    if (!attendanceData) return;
+    if (!attendanceData || !attendanceData.months) return;
 
-    let targetStudent = null;
-    let targetMonth = null;
-    let studentStats = null;
+    // Ambil referensi bulan dan siswa secara sinkron langsung dari data aktif
+    const curMonth = attendanceData.months.find((m) => m.id === monthId) || attendanceData.months[0];
+    const curStudent = curMonth?.students?.find((s) => s.no === studentNo);
+    if (!curMonth || !curStudent) return;
 
+    // Hitung statistik siswa yang baru setelah update
+    const updatedDays = { ...curStudent.days, [dayNum]: newMark };
+    let h = 0,
+      sk = 0,
+      iz = 0,
+      al = 0;
+    curMonth.dayNumbers.forEach((d) => {
+      const mark = updatedDays[d];
+      if (mark === '.') h++;
+      else if (mark === 'S') sk++;
+      else if (mark === 'I') iz++;
+      else if (mark === 'A') al++;
+    });
+    const studentStats = { sakit: sk, izin: iz, alpa: al };
+
+    // Update state React (optimistic UI update 0ms)
     setAttendanceData((prev) => {
       const newMonths = prev.months.map((m) => {
-        if (m.id !== monthId) return m;
-        targetMonth = m;
+        if (m.id !== curMonth.id) return m;
 
         const updatedStudents = m.students.map((s) => {
           if (s.no !== studentNo) return s;
 
-          const updatedDays = { ...s.days, [dayNum]: newMark };
-
-          let h = 0,
-            sk = 0,
-            iz = 0,
-            al = 0;
-          m.dayNumbers.forEach((d) => {
-            const mark = updatedDays[d];
-            if (mark === '.') h++;
-            else if (mark === 'S') sk++;
-            else if (mark === 'I') iz++;
-            else if (mark === 'A') al++;
-          });
-
           const effective = h + sk + iz + al;
           const rate = effective > 0 ? Math.round((h / effective) * 100) : 100;
 
-          const updatedStud = {
+          return {
             ...s,
             days: updatedDays,
             hadir: h,
@@ -393,11 +434,6 @@ export default function App() {
             effectiveDays: effective,
             attendanceRate: rate
           };
-
-          targetStudent = updatedStud;
-          studentStats = { sakit: sk, izin: iz, alpa: al };
-
-          return updatedStud;
         });
 
         let totH = 0,
@@ -438,11 +474,11 @@ export default function App() {
     });
 
     // 1. Live Sync Langsung ke Google Sheets via REST API (jika login Google aktif)
-    if (googleToken && targetStudent && targetMonth) {
+    if (googleToken) {
       const rowIndex =
-        targetStudent.rowIndex ||
-        (targetMonth.headerRowIndex ? targetMonth.headerRowIndex + 1 + (targetStudent.no || studentNo) : null);
-      const colIdx = targetMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
+        curStudent.rowIndex ||
+        (curMonth.headerRowIndex ? curMonth.headerRowIndex + 1 + (studentNo - 1) : (2 + studentNo));
+      const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
 
       if (rowIndex) {
         queueAttendanceMarkUpdate(
@@ -457,18 +493,134 @@ export default function App() {
           googleToken
         );
       }
-    }
-
-    // 2. Cloud sync ke Google Apps Script Webhook (jika scriptUrl terpasang)
-    if (sheetConfig.scriptUrl && targetMonth && targetStudent) {
+    } else if (sheetConfig.scriptUrl) {
       syncAttendanceMarkToSheet(sheetConfig.scriptUrl, {
-        monthName: targetMonth.name,
-        studentName: targetStudent.name,
+        monthName: curMonth.name,
+        studentName: curStudent.name,
         studentNo: studentNo,
         dayNum: dayNum,
         day: dayNum,
         mark: newMark
       }).catch((err) => console.warn('Cloud sync error:', err));
+    } else {
+      notifyGoogleConnectionNeeded(curMonth.name);
+    }
+  };
+
+  // Batch Attendance Updater (Untuk Input Teks Cepat agar 1x State & 1x Queue Batch)
+  const handleBatchUpdateAttendance = (monthId, dayNum, rosterUpdates) => {
+    if (!attendanceData || !attendanceData.months) return;
+
+    const curMonth = attendanceData.months.find((m) => m.id === monthId) || attendanceData.months[0];
+    if (!curMonth) return;
+
+    const updateMap = new Map();
+    rosterUpdates.forEach((u) => updateMap.set(u.no, u.mark));
+
+    setAttendanceData((prev) => {
+      const newMonths = prev.months.map((m) => {
+        if (m.id !== curMonth.id) return m;
+
+        const updatedStudents = m.students.map((s) => {
+          if (!updateMap.has(s.no)) return s;
+          const newMark = updateMap.get(s.no);
+          const updatedDays = { ...s.days, [dayNum]: newMark };
+
+          let h = 0,
+            sk = 0,
+            iz = 0,
+            al = 0;
+          m.dayNumbers.forEach((d) => {
+            const mark = updatedDays[d];
+            if (mark === '.') h++;
+            else if (mark === 'S') sk++;
+            else if (mark === 'I') iz++;
+            else if (mark === 'A') al++;
+          });
+
+          const effective = h + sk + iz + al;
+          const rate = effective > 0 ? Math.round((h / effective) * 100) : 100;
+
+          return {
+            ...s,
+            days: updatedDays,
+            hadir: h,
+            sakit: sk,
+            izin: iz,
+            alpa: al,
+            effectiveDays: effective,
+            attendanceRate: rate
+          };
+        });
+
+        let totH = 0,
+          totS = 0,
+          totI = 0,
+          totA = 0;
+        updatedStudents.forEach((s) => {
+          totH += s.hadir;
+          totS += s.sakit;
+          totI += s.izin;
+          totA += s.alpa;
+        });
+
+        const totalActive = totH + totS + totI + totA;
+        const overallRate = totalActive > 0 ? ((totH / totalActive) * 100).toFixed(1) : '100.0';
+
+        return {
+          ...m,
+          students: updatedStudents,
+          stats: {
+            ...m.stats,
+            totalHadir: totH,
+            totalSakit: totS,
+            totalIzin: totI,
+            totalAlpa: totA,
+            effectiveAttendanceRate: overallRate + '%'
+          }
+        };
+      });
+
+      const updated = { ...prev, months: newMonths };
+      persistAttendance(updated);
+      return updated;
+    });
+
+    if (googleToken) {
+      rosterUpdates.forEach((u) => {
+        const student = curMonth.students.find((s) => s.no === u.no);
+        if (!student) return;
+
+        const rowIndex =
+          student.rowIndex ||
+          (curMonth.headerRowIndex ? curMonth.headerRowIndex + 1 + (student.no - 1) : (2 + student.no));
+        const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
+
+        const updatedDays = { ...student.days, [dayNum]: u.mark };
+        let sk = 0,
+          iz = 0,
+          al = 0;
+        curMonth.dayNumbers.forEach((d) => {
+          const mark = updatedDays[d];
+          if (mark === 'S') sk++;
+          else if (mark === 'I') iz++;
+          else if (mark === 'A') al++;
+        });
+
+        queueAttendanceMarkUpdate(
+          sheetConfig.id,
+          {
+            rowIndex,
+            colIdx,
+            dayNum,
+            mark: u.mark,
+            studentStats: { sakit: sk, izin: iz, alpa: al }
+          },
+          googleToken
+        );
+      });
+    } else {
+      notifyGoogleConnectionNeeded(curMonth.name);
     }
   };
 
@@ -931,6 +1083,7 @@ export default function App() {
         onClose={() => setIsQuickTextOpen(false)}
         currentMonth={activeMonthData}
         onApplyAttendance={handleUpdateAttendance}
+        onApplyBatchAttendance={handleBatchUpdateAttendance}
       />
 
       <GoogleAuthModal

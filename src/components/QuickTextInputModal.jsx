@@ -18,7 +18,8 @@ export default function QuickTextInputModal({
   isOpen,
   onClose,
   currentMonth,
-  onApplyAttendance
+  onApplyAttendance,
+  onApplyBatchAttendance
 }) {
   const todayDate = new Date().getDate();
   const [selectedDay, setSelectedDay] = useState(
@@ -45,18 +46,24 @@ export default function QuickTextInputModal({
   const countAlpa = parseResult.fullRosterResult.filter((s) => s.mark === 'A').length;
 
   const handleApply = () => {
-    if (onApplyAttendance) {
+    if (onApplyBatchAttendance) {
+      onApplyBatchAttendance(currentMonth.id, selectedDay, parseResult.fullRosterResult);
+    } else if (onApplyAttendance) {
       // Apply the attendance marks for the selected day to all students
       parseResult.fullRosterResult.forEach((s) => {
         onApplyAttendance(currentMonth.id, s.no, selectedDay, s.mark);
       });
     }
 
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
+    try {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    } catch {
+      // ignore
+    }
 
     onClose();
   };

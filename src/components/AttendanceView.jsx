@@ -60,10 +60,17 @@ export default function AttendanceView({
     return true;
   });
 
-  // Click cell to view student details safely without accidentally modifying marks
-  const handleCellClick = (studentNo) => {
-    const s = students.find((item) => item.no === studentNo);
-    if (s && onSelectStudent) onSelectStudent(s);
+  // Klik sel tanggal untuk mengubah status kehadiran (Hadir -> Sakit -> Izin -> Alpa -> Kosong)
+  const handleToggleMark = (studentNo, dayNum, currentMark) => {
+    if (!onUpdateAttendance) return;
+    let nextMark = '.';
+    if (currentMark === '.') nextMark = 'S';
+    else if (currentMark === 'S') nextMark = 'I';
+    else if (currentMark === 'I') nextMark = 'A';
+    else if (currentMark === 'A') nextMark = '';
+    else if (currentMark === '') nextMark = '.';
+
+    onUpdateAttendance(currentMonth.id, studentNo, dayNum, nextMark);
   };
 
   // Export current month table to CSV
@@ -394,9 +401,12 @@ export default function AttendanceView({
                       <td
                         key={d}
                         className={`mark-cell ${markClass}`}
-                        onClick={() => handleCellClick(s.no)}
-                        style={{ cursor: 'pointer' }}
-                        title={`${s.name} - Tgl ${d}: ${mark === '.' ? 'Hadir' : mark === 'S' ? 'Sakit' : mark === 'I' ? 'Izin' : mark === 'A' ? 'Alpa' : mark || 'Belum Ada Keterangan'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleMark(s.no, d, mark);
+                        }}
+                        style={{ cursor: 'pointer', userSelect: 'none' }}
+                        title={`${s.name} - Tgl ${d}\nStatus: ${mark === '.' ? 'Hadir (•)' : mark === 'S' ? 'Sakit (S)' : mark === 'I' ? 'Izin (I)' : mark === 'A' ? 'Alpa (A)' : 'Belum Ada'}\n(Klik untuk siklus: Hadir -> Sakit -> Izin -> Alpa -> Kosong)`}
                       >
                         {mark === '.' ? '•' : mark || '-'}
                       </td>
