@@ -200,21 +200,22 @@ async function formatAppendedMonthTable(spreadsheetId, updatedRange, monthName, 
     const absensiSheet = metaData.sheets?.find((s) => s.properties?.title === 'ABSENSI') || metaData.sheets?.[0];
     const sheetId = absensiSheet?.properties?.sheetId ?? 272037099;
 
-    // 2. Parse rentang baris dari updatedRange (contoh: "ABSENSI!A45:AL85")
-    const match = updatedRange?.match(/[!A-Z]+(\d+):[A-Z]+(\d+)/i);
+    // 2. Parse rentang baris dari updatedRange (contoh: "ABSENSI!A45:AL85" atau "'ABSENSI'!A45:AL85")
+    const match = updatedRange?.match(/!([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)/);
     if (!match) return;
-    const startRow1 = parseInt(match[1], 10); // 1-indexed
-    const endRow1 = parseInt(match[2], 10);
+    const startRow1 = parseInt(match[2], 10); // 1-indexed (misal: 45)
+    const endRow1 = parseInt(match[4], 10);
 
     // Di dalam data yang di-append:
-    // Baris 0 & 1: pemisah
-    // Baris 2: Judul Bulan
-    // Baris 3: Header Kolom (NO, NAMA SISWA, 1..31...)
-    // Baris 4 s.d. 4 + studentCount - 1: Baris Siswa
-    const headerRowIndex = startRow1 - 1 + 2; // 0-indexed
+    // Offset 0 & 1: pemisah baris kosong
+    // Offset 2: Judul Bulan
+    // Offset 3: Header Kolom (NO, NAMA SISWA, 1..31...)
+    // Offset 4 s.d. 4 + studentCount - 1: Baris Siswa (28 siswa)
+    const baseIndex = startRow1 - 1; // 0-indexed
+    const titleRowIndex = baseIndex + 2;
+    const headerRowIndex = baseIndex + 3;
     const firstStudentRowIndex = headerRowIndex + 1;
     const lastStudentRowIndex = firstStudentRowIndex + studentCount;
-    const titleRowIndex = headerRowIndex - 1;
 
     const requests = [];
 
