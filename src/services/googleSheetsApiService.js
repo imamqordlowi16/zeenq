@@ -696,17 +696,22 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
   const data = await res.json();
   const rows = data.values || [];
 
+  let hasStrayJuliAtTop = false;
   const headers = [];
+
   rows.forEach((row, idx) => {
+    const rowStr = row.join(' ').toUpperCase();
+    if (idx < 5 && rowStr.includes('BULAN JULI')) {
+      hasStrayJuliAtTop = true;
+    }
     if (row.some((c) => String(c).toUpperCase().includes('NAMA SISWA') || String(c).toUpperCase() === 'NAMA')) {
       headers.push(idx);
     }
   });
 
-  // Jika terdapat tabel uji coba lama di atas tabel asli Januari (headers.length >= 2)
-  if (headers.length >= 2) {
+  // HANYA hapus baris teratas jika BENAR-BENAR ada tabel nyasar 'BULAN JULI' di paling atas
+  if (hasStrayJuliAtTop && headers.length >= 2) {
     const secondHeaderIdx = headers[1];
-    // Sisakan 2 baris kosong untuk judul resmi Januari
     const deleteEnd = secondHeaderIdx >= 2 ? secondHeaderIdx - 2 : secondHeaderIdx;
 
     const deleteRes = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`, {
