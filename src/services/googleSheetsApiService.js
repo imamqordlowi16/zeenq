@@ -947,6 +947,10 @@ export async function fixSemester2Spreadsheet(spreadsheetId, accessToken) {
         {
           range: 'ABSENSI!A2:AK2',
           values: [cleanRow2]
+        },
+        {
+          range: 'ABSENSI!AH3:AK3',
+          values: [['Sakit', 'Izin', 'Alpa', 'Jumlah']]
         }
       ]
     })

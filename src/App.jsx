@@ -176,9 +176,8 @@ export default function App() {
               const savedMutasi = localStorage.getItem(`zeenq_mutasi_${config.id}`);
               if (savedMutasi) setMutasiData(JSON.parse(savedMutasi));
 
+              // Optimistic instant render from cache; proceed to fetch live sheet data in background
               setIsLoading(false);
-              setIsRefreshing(false);
-              return;
             }
           } catch (e) {
             console.warn('Could not parse local master data:', e);
@@ -475,9 +474,9 @@ export default function App() {
 
     // 1. Live Sync Langsung ke Google Sheets via REST API (jika login Google aktif)
     if (googleToken) {
-      const rowIndex =
-        curStudent.rowIndex ||
-        (curMonth.headerRowIndex ? curMonth.headerRowIndex + 1 + (studentNo - 1) : (2 + studentNo));
+      const isJan = curMonth.id === 'januari' || curMonth.name?.toUpperCase() === 'JANUARI';
+      const fallbackRow = (curMonth.headerRowIndex || (isJan ? 2 : 39)) + (isJan ? 2 : 1) + (studentNo - 1);
+      const rowIndex = curStudent.rowIndex || fallbackRow;
       const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
 
       if (rowIndex) {
@@ -591,9 +590,9 @@ export default function App() {
         const student = curMonth.students.find((s) => s.no === u.no);
         if (!student) return;
 
-        const rowIndex =
-          student.rowIndex ||
-          (curMonth.headerRowIndex ? curMonth.headerRowIndex + 1 + (student.no - 1) : (2 + student.no));
+        const isJan = curMonth.id === 'januari' || curMonth.name?.toUpperCase() === 'JANUARI';
+        const fallbackRow = (curMonth.headerRowIndex || (isJan ? 2 : 39)) + (isJan ? 2 : 1) + (student.no - 1);
+        const rowIndex = student.rowIndex || fallbackRow;
         const colIdx = curMonth.dayColMap?.[dayNum] ?? (1 + dayNum);
 
         const updatedDays = { ...student.days, [dayNum]: u.mark };
