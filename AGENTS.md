@@ -88,13 +88,25 @@ Dokumen ini berisi rangkuman lengkap arsitektur sistem, aturan bisnis, pemetaan 
 - **Ekspor Excel (.xlsx)**: File spreadsheet hasil unduhan dengan tanda titik `.` murni.
 - **Bagikan Laporan Harian**: Format teks ringkasan untuk grup WhatsApp wali murid.
 
+### F. Dukungan Mobile & Progressive Web App (PWA)
+- **Installable PWA**: Terdaftar melalui `public/manifest.json`, icon SVG 192px/512px, meta tag standalone iOS/Android, dan pendaftaran Service Worker (`public/sw.js`) dengan strategi caching *Stale-While-Revalidate*.
+- **Banner Instalasi Cerdas (`InstallPwaBanner.jsx`)**: Menampilkan tombol instal otomatis pada Chrome/Android dan instruksi khusus "Add to Home Screen" pada iOS Safari.
+- **Mode Kartu Absensi Sentuh (`MobileAttendanceCards.jsx`)**:
+  - Tampilan kartu absensi vertikal yang ramah layar sentuh (touch targets $\ge 44$px).
+  - Pita pemilih tanggal (*date strip*) yang bisa digeser dengan mudah.
+  - 5 tombol status langsung (H, S, I, A, -) per siswa tanpa perlu membuka modal.
+  - Tombol toggle instan antara **Mode Kartu (HP)** dan **Mode Tabel Matriks** di `AttendanceView.jsx`.
+
 ---
 
 ## 5. Ringkasan File Kunci
 - `src/App.jsx`: State utama aplikasi, fungsi `computeStudentRowIndex`, integrasi event handler, toast notification.
 - `src/services/googleSheetsApiService.js`: Integrasi Google Sheets REST API v4, `queueAttendanceMarkUpdate`, `fixSemester2Spreadsheet`, `appendMonthToGoogleSheet`.
 - `src/services/sheetParser.js`: Parser CSV & array live rows, penentuan semester, kalkulasi statistik kehadiran harian/bulanan.
-- `src/components/AttendanceView.jsx`: Tampilan matriks absensi, legenda kehadiran, navigasi bulan, aksi klik sel.
+- `src/components/AttendanceView.jsx`: Tampilan matriks absensi, legenda kehadiran, navigasi bulan, aksi klik sel, switch mode Kartu / Matriks.
+- `src/components/MobileAttendanceCards.jsx`: Komponen kartu absensi harian ramah sentuhan khusus layar mobile/HP.
+- `src/components/InstallPwaBanner.jsx`: Banner interaktif untuk instalasi PWA di Android dan iOS.
 - `src/components/QuickTextInputModal.jsx`: Modal input teks presensi cepat berbasis parser regex/NLP.
 - `src/components/PrintReportModal.jsx`: Modal pratinjau cetak laporan absensi dinas.
+- `public/manifest.json` & `public/sw.js`: Konfigurasi PWA dan Service Worker caching.
 - `zeeniq_web.zip`: Arsip build produksi siap *deploy* atau distribusikan.

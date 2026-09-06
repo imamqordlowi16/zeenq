@@ -10,6 +10,7 @@ import PrintReportModal from './components/PrintReportModal';
 import QuickTextInputModal from './components/QuickTextInputModal';
 import GoogleScriptSetupModal from './components/GoogleScriptSetupModal';
 import GoogleAuthModal from './components/GoogleAuthModal';
+import InstallPwaBanner from './components/InstallPwaBanner';
 import { getStoredGoogleSession, clearGoogleSession } from './services/googleAuthService';
 import { appendMonthToGoogleSheet, deleteCorruptedUpperRows, fetchLiveSheetValues, fixSemester2Spreadsheet, queueAttendanceMarkUpdate, onSheetSyncStatusChange } from './services/googleSheetsApiService';
 import confetti from 'canvas-confetti';
@@ -1070,6 +1071,9 @@ export default function App() {
           <span>Data Siswa</span>
         </button>
       </nav>
+
+      {/* PWA Install Banner */}
+      <InstallPwaBanner />
 
       {/* Modals */}
       <SheetConfigModal

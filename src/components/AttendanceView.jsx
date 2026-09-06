@@ -12,11 +12,14 @@ import {
   Share2,
   Plus,
   Trash2,
-  X
+  X,
+  Smartphone,
+  Table
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportToCSV, generateWhatsAppReport } from '../utils/exportUtils';
 import AddMonthModal from './AddMonthModal';
+import MobileAttendanceCards from './MobileAttendanceCards';
 
 export default function AttendanceView({
   attendanceData,
@@ -34,6 +37,13 @@ export default function AttendanceView({
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, ABSENT_ONLY, PERFECT_ONLY
   const [activeDayFilter, setActiveDayFilter] = useState(null);
   const [isAddMonthOpen, setIsAddMonthOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      return 'CARDS';
+    }
+    return 'MATRIX';
+  });
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const currentMonth =
     attendanceData?.months?.find((m) => m.id === selectedMonth) ||
@@ -115,15 +125,68 @@ export default function AttendanceView({
       >
         <div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-            Matriks Presensi Harian — {currentMonth.name}
+            {viewMode === 'CARDS'
+              ? `Presensi Siswa — ${currentMonth.name}`
+              : `Matriks Presensi Harian — ${currentMonth.name}`}
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.83rem' }}>
-            Daftar absensi siswa tanggal 1 s/d 31 secara rinci (Hadir, Sakit, Izin, Alpa)
+            {viewMode === 'CARDS'
+              ? 'Mode sentuh harian: pilih tanggal lalu tandai Hadir, Sakit, Izin, atau Alpa'
+              : 'Daftar absensi siswa tanggal 1 s/d 31 secara rinci (Hadir, Sakit, Izin, Alpa)'}
           </p>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons & Mode Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Mode Switcher Toggle */}
+          <div
+            style={{
+              display: 'inline-flex',
+              padding: '3px',
+              borderRadius: '10px',
+              background: 'var(--bg-surface-subtle)',
+              border: '1px solid var(--border-color)',
+              gap: '4px'
+            }}
+          >
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'CARDS' ? 'btn-primary' : ''}`}
+              onClick={() => setViewMode('CARDS')}
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                boxShadow: viewMode === 'CARDS' ? '0 2px 8px var(--primary-glow)' : 'none',
+                background: viewMode === 'CARDS' ? undefined : 'transparent',
+                border: 'none',
+                color: viewMode === 'CARDS' ? undefined : 'var(--text-secondary)'
+              }}
+              title="Mode Kartu Harian (Khusus Layar HP / Ramah Sentuhan)"
+            >
+              <Smartphone size={14} />
+              <span>Kartu HP</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${viewMode === 'MATRIX' ? 'btn-primary' : ''}`}
+              onClick={() => setViewMode('MATRIX')}
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                boxShadow: viewMode === 'MATRIX' ? '0 2px 8px var(--primary-glow)' : 'none',
+                background: viewMode === 'MATRIX' ? undefined : 'transparent',
+                border: 'none',
+                color: viewMode === 'MATRIX' ? undefined : 'var(--text-secondary)'
+              }}
+              title="Mode Tabel Matriks Lengkap 31 Kolom"
+            >
+              <Table size={14} />
+              <span>Tabel Matriks</span>
+            </button>
+          </div>
+
           <button
             className="btn btn-primary btn-sm"
             onClick={onOpenQuickText}
@@ -243,205 +306,217 @@ export default function AttendanceView({
         )}
       </div>
 
-      {/* Filter and Search Bar */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: '12px 16px',
-          marginBottom: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}
-      >
-        {/* Search */}
-        <div
-          style={{
-            position: 'relative',
-            flex: '1 1 240px',
-            maxWidth: '380px'
-          }}
-        >
-          <Search
-            size={16}
+      {viewMode === 'CARDS' ? (
+        <MobileAttendanceCards
+          currentMonth={currentMonth}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
+          onUpdateAttendance={onUpdateAttendance}
+          onOpenQuickText={onOpenQuickText}
+        />
+      ) : (
+        <>
+          {/* Filter and Search Bar */}
+          <div
+            className="glass-panel"
             style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)'
+              padding: '12px 16px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
             }}
-          />
-          <input
-            type="text"
-            className="input-control"
-            style={{ paddingLeft: '36px' }}
-            placeholder="Cari nama siswa..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        {/* Filter Badges */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-            Filter:
-          </span>
-          <button
-            className={`btn btn-sm ${statusFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('ALL')}
           >
-            Semua ({students.length})
-          </button>
-          <button
-            className={`btn btn-sm ${statusFilter === 'ABSENT_ONLY' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('ABSENT_ONLY')}
+            {/* Search */}
+            <div
+              style={{
+                position: 'relative',
+                flex: '1 1 240px',
+                maxWidth: '380px'
+              }}
+            >
+              <Search
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)'
+                }}
+              />
+              <input
+                type="text"
+                className="input-control"
+                style={{ paddingLeft: '36px' }}
+                placeholder="Cari nama siswa..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Filter Badges */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Filter:
+              </span>
+              <button
+                className={`btn btn-sm ${statusFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setStatusFilter('ALL')}
+              >
+                Semua ({students.length})
+              </button>
+              <button
+                className={`btn btn-sm ${statusFilter === 'ABSENT_ONLY' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setStatusFilter('ABSENT_ONLY')}
+              >
+                Pernah Absen
+              </button>
+              <button
+                className={`btn btn-sm ${statusFilter === 'PERFECT_ONLY' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setStatusFilter('PERFECT_ONLY')}
+              >
+                Hadir Penuh 100%
+              </button>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              flexWrap: 'wrap',
+              marginBottom: '12px',
+              fontSize: '0.8rem',
+              color: 'var(--text-secondary)'
+            }}
           >
-            Pernah Absen
-          </button>
-          <button
-            className={`btn btn-sm ${statusFilter === 'PERFECT_ONLY' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('PERFECT_ONLY')}
-          >
-            Hadir Penuh 100%
-          </button>
-        </div>
-      </div>
+            <span style={{ fontWeight: 600 }}>Keterangan:</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span className="mark-cell mark-dot" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px', fontWeight: 800, fontSize: '1rem' }}>.</span>
+              Hadir
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span className="mark-cell mark-s" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>S</span>
+              Sakit
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span className="mark-cell mark-i" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>I</span>
+              Izin
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span className="mark-cell mark-a" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>A</span>
+              Alpa (Tanpa Keterangan)
+            </span>
+          </div>
 
-      {/* Legend */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '14px',
-          flexWrap: 'wrap',
-          marginBottom: '12px',
-          fontSize: '0.8rem',
-          color: 'var(--text-secondary)'
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>Keterangan:</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <span className="mark-cell mark-dot" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px', fontWeight: 800, fontSize: '1rem' }}>.</span>
-          Hadir
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <span className="mark-cell mark-s" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>S</span>
-          Sakit
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <span className="mark-cell mark-i" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>I</span>
-          Izin
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          <span className="mark-cell mark-a" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '4px' }}>A</span>
-          Alpa (Tanpa Keterangan)
-        </span>
-      </div>
-
-      {/* Attendance Matrix Table */}
-      <div className="matrix-container">
-        <table className="matrix-table" role="grid">
-          <thead>
-            <tr>
-              <th className="col-sticky-no" scope="col">No</th>
-              <th className="col-sticky-name" scope="col">Nama Siswa</th>
-              {dayNumbers.map((d) => (
-                <th
-                  key={d}
-                  scope="col"
-                  style={{ minWidth: '34px', cursor: 'pointer' }}
-                  title={`Klik untuk bagikan laporan harian Tgl ${d}`}
-                  onClick={() => handleShareDaily(d)}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span>{d}</span>
-                  </div>
-                </th>
-              ))}
-              <th scope="col" style={{ background: 'var(--status-sakit-bg)', color: 'var(--status-sakit)' }}>S</th>
-              <th scope="col" style={{ background: 'var(--status-izin-bg)', color: 'var(--status-izin)' }}>I</th>
-              <th scope="col" style={{ background: 'var(--status-alpa-bg)', color: 'var(--status-alpa)' }}>A</th>
-              <th scope="col" style={{ minWidth: '70px' }}>% Hadir</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStudents.length === 0 ? (
-              <tr>
-                <td colSpan={dayNumbers.length + 6} style={{ padding: '30px', color: 'var(--text-muted)' }}>
-                  Tidak ada siswa yang sesuai dengan kriteria pencarian.
-                </td>
-              </tr>
-            ) : (
-              filteredStudents.map((s) => (
-                <tr key={s.no}>
-                  <td className="col-sticky-no">{s.no}</td>
-                  <td
-                    className="col-sticky-name"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onSelectStudent && onSelectStudent(s)}
-                    title="Klik untuk melihat profil kehadiran siswa"
-                  >
-                    <span style={{ color: 'var(--text-primary)' }}>{s.name}</span>
-                  </td>
-
-                  {/* Day cells */}
-                  {dayNumbers.map((d) => {
-                    const mark = s.days[d] || '';
-                    let markClass = 'mark-empty';
-                    if (mark === '.') markClass = 'mark-dot';
-                    else if (mark === 'S') markClass = 'mark-s';
-                    else if (mark === 'I') markClass = 'mark-i';
-                    else if (mark === 'A') markClass = 'mark-a';
-                    else if (mark.length > 1) markClass = 'mark-holiday';
-
-                    return (
-                      <td
-                        key={d}
-                        className={`mark-cell ${markClass}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleMark(s.no, d, mark);
-                        }}
-                        style={{ cursor: 'pointer', userSelect: 'none' }}
-                        title={`${s.name} - Tgl ${d}\nStatus: ${mark === '.' ? 'Hadir (.)' : mark === 'S' ? 'Sakit (S)' : mark === 'I' ? 'Izin (I)' : mark === 'A' ? 'Alpa (A)' : 'Belum Ada'}\n(Klik untuk siklus: Hadir -> Sakit -> Izin -> Alpa -> Kosong)`}
-                      >
-                        {mark || '-'}
-                      </td>
-                    );
-                  })}
-
-                  {/* Totals */}
-                  <td style={{ fontWeight: 700, color: s.sakit > 0 ? 'var(--status-sakit)' : 'var(--text-muted)' }}>
-                    {s.sakit || '-'}
-                  </td>
-                  <td style={{ fontWeight: 700, color: s.izin > 0 ? 'var(--status-izin)' : 'var(--text-muted)' }}>
-                    {s.izin || '-'}
-                  </td>
-                  <td style={{ fontWeight: 700, color: s.alpa > 0 ? 'var(--status-alpa)' : 'var(--text-muted)' }}>
-                    {s.alpa || '-'}
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        s.attendanceRate >= 95
-                          ? 'badge-hadir'
-                          : s.attendanceRate >= 80
-                          ? 'badge-izin'
-                          : 'badge-alpa'
-                      }`}
+          {/* Attendance Matrix Table */}
+          <div className="matrix-container">
+            <table className="matrix-table" role="grid">
+              <thead>
+                <tr>
+                  <th className="col-sticky-no" scope="col">No</th>
+                  <th className="col-sticky-name" scope="col">Nama Siswa</th>
+                  {dayNumbers.map((d) => (
+                    <th
+                      key={d}
+                      scope="col"
+                      style={{ minWidth: '34px', cursor: 'pointer' }}
+                      title={`Klik untuk bagikan laporan harian Tgl ${d}`}
+                      onClick={() => handleShareDaily(d)}
                     >
-                      {s.attendanceRate}%
-                    </span>
-                  </td>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span>{d}</span>
+                      </div>
+                    </th>
+                  ))}
+                  <th scope="col" style={{ background: 'var(--status-sakit-bg)', color: 'var(--status-sakit)' }}>S</th>
+                  <th scope="col" style={{ background: 'var(--status-izin-bg)', color: 'var(--status-izin)' }}>I</th>
+                  <th scope="col" style={{ background: 'var(--status-alpa-bg)', color: 'var(--status-alpa)' }}>A</th>
+                  <th scope="col" style={{ minWidth: '70px' }}>% Hadir</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {filteredStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={dayNumbers.length + 6} style={{ padding: '30px', color: 'var(--text-muted)' }}>
+                      Tidak ada siswa yang sesuai dengan kriteria pencarian.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStudents.map((s) => (
+                    <tr key={s.no}>
+                      <td className="col-sticky-no">{s.no}</td>
+                      <td
+                        className="col-sticky-name"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onSelectStudent && onSelectStudent(s)}
+                        title="Klik untuk melihat profil kehadiran siswa"
+                      >
+                        <span style={{ color: 'var(--text-primary)' }}>{s.name}</span>
+                      </td>
+
+                      {/* Day cells */}
+                      {dayNumbers.map((d) => {
+                        const mark = s.days[d] || '';
+                        let markClass = 'mark-empty';
+                        if (mark === '.') markClass = 'mark-dot';
+                        else if (mark === 'S') markClass = 'mark-s';
+                        else if (mark === 'I') markClass = 'mark-i';
+                        else if (mark === 'A') markClass = 'mark-a';
+                        else if (mark.length > 1) markClass = 'mark-holiday';
+
+                        return (
+                          <td
+                            key={d}
+                            className={`mark-cell ${markClass}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleMark(s.no, d, mark);
+                            }}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            title={`${s.name} - Tgl ${d}\nStatus: ${mark === '.' ? 'Hadir (.)' : mark === 'S' ? 'Sakit (S)' : mark === 'I' ? 'Izin (I)' : mark === 'A' ? 'Alpa (A)' : 'Belum Ada'}\n(Klik untuk siklus: Hadir -> Sakit -> Izin -> Alpa -> Kosong)`}
+                          >
+                            {mark || '-'}
+                          </td>
+                        );
+                      })}
+
+                      {/* Totals */}
+                      <td style={{ fontWeight: 700, color: s.sakit > 0 ? 'var(--status-sakit)' : 'var(--text-muted)' }}>
+                        {s.sakit || '-'}
+                      </td>
+                      <td style={{ fontWeight: 700, color: s.izin > 0 ? 'var(--status-izin)' : 'var(--text-muted)' }}>
+                        {s.izin || '-'}
+                      </td>
+                      <td style={{ fontWeight: 700, color: s.alpa > 0 ? 'var(--status-alpa)' : 'var(--text-muted)' }}>
+                        {s.alpa || '-'}
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            s.attendanceRate >= 95
+                              ? 'badge-hadir'
+                              : s.attendanceRate >= 80
+                              ? 'badge-izin'
+                              : 'badge-alpa'
+                          }`}
+                        >
+                          {s.attendanceRate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* Footer Signatures from Sheet */}
       <div

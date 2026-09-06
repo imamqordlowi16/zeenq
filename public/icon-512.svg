@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3730a3"/>
+      <stop offset="40%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="glowGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow512" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#1e1b4b" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background container -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad512)"/>
+  
+  <!-- Subtle glass highlight -->
+  <rect x="12" y="12" width="488" height="240" rx="100" fill="url(#glowGrad512)"/>
+
+  <!-- Logo Graphics -->
+  <g filter="url(#shadow512)">
+    <!-- Elegant Z Monogram -->
+    <path d="M140 150 H372 L234 320 H380 V362 H130 L268 192 H140 Z" fill="#ffffff"/>
+    
+    <!-- Hadir Emerald Dot Badge -->
+    <circle cx="372" cy="150" r="32" fill="#10b981"/>
+    <path d="M362 150 L370 158 L384 142" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Light Accent Dot -->
+    <circle cx="130" cy="362" r="16" fill="#38bdf8"/>
+  </g>
+</svg>

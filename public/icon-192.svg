@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#312e81" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background with rounded corners for app icon -->
+  <rect width="192" height="192" rx="42" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle inner glow overlay -->
+  <rect x="4" y="4" width="184" height="92" rx="38" fill="url(#glowGrad)"/>
+
+  <!-- Main Z Monogram & Checkmark Icon -->
+  <g filter="url(#shadow)">
+    <!-- Stylized modern Z glyph -->
+    <path d="M52 56 H140 L88 120 H144 V136 H48 L100 72 H52 Z" fill="#ffffff"/>
+    
+    <!-- Accent Dot (Presensi Hadir) -->
+    <circle cx="140" cy="56" r="12" fill="#10b981"/>
+    
+    <!-- Sparkle accent -->
+    <circle cx="52" cy="136" r="6" fill="#38bdf8"/>
+  </g>
+</svg>
